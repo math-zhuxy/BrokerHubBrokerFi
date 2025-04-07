@@ -31,6 +31,7 @@ var (
 )
 
 func JoinToBrokerhub(c *gin.Context) {
+	fmt.Println("Get Join Brokerhub Request")
 	var msg joinToBrokerHubMeg
 	if err := c.ShouldBindJSON(&msg); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -38,8 +39,19 @@ func JoinToBrokerhub(c *gin.Context) {
 		})
 		return
 	}
-	fmt.Println("Get Join Brokerhub Request")
+	if _, exist := mytool.BrokerHubJoinState[msg.BrokerId]; exist {
+		c.JSON(
+			http.StatusOK,
+			gin.H{
+				"status": "alreadyin",
+			},
+		)
+		return
+	}
+	mytool.BrokerHubJoinState[msg.BrokerId] = 0
+	mytool.RequestLock.Lock()
 	mytool.JoinToBrokerhubRequest = append(mytool.JoinToBrokerhubRequest, msg.BrokerId)
+	mytool.RequestLock.Unlock()
 	c.JSON(
 		http.StatusOK,
 		gin.H{

@@ -95,7 +95,8 @@ func (d *Supervisor) NewSupervisor(ip string, pcc *params.ChainConfig, committee
 	case "Broker":
 		d.ComMod = committee.NewBrokerCommitteeMod(d.Ip_nodeTable, d.Ss, d.sl, params.FileInput, params.TotalDataSize, params.BatchSize)
 	case "Broker_b2e":
-		d.ComMod = committee.NewBrokerCommitteeMod_b2e(d.Ip_nodeTable, d.Ss, d.sl, params.FileInput, params.TotalDataSize, params.BatchSize)
+		// d.ComMod = committee.NewBrokerCommitteeMod_b2e(d.Ip_nodeTable, d.Ss, d.sl, params.FileInput, params.TotalDataSize, params.BatchSize)
+		d.ComMod = committee.NewBrokerhubCommitteeMod(d.Ip_nodeTable, d.Ss, d.sl, params.FileInput, params.TotalDataSize, params.BatchSize)
 	default:
 		d.ComMod = committee.NewRelayCommitteeModule(d.Ip_nodeTable, d.Ss, d.sl, params.FileInput, params.TotalDataSize, params.BatchSize)
 	}
@@ -1459,6 +1460,29 @@ func (d *Supervisor) RunHTTP() error {
 
 	})
 
+	router.GET("/querybrokerprofit3", func(c *gin.Context) {
+		d := c.MustGet("supervisor").(*Supervisor)
+		addr := c.Query("addr")
+		if addr == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Address is required"})
+			return
+		}
+		fmt.Println("addr:", addr)
+		d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Lock()
+		defer d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Unlock()
+
+		m := d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.ProfitBalance[addr]
+		m2 := d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.BrokerBalance[addr]
+		m3 := d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.LockBalance[addr]
+		convertedData := make(map[string]string)
+		for k, v := range m2 {
+			convertedData[fmt.Sprintf("%d", k)] = m[k].String() + "/" + (new(big.Int).Add(v, m3[k])).String()
+		}
+
+		c.JSON(http.StatusOK, convertedData)
+
+	})
+
 	//查询是否是broker
 	router.GET("/queryisbroker", func(c *gin.Context) {
 		d := c.MustGet("supervisor").(*Supervisor)
@@ -1584,44 +1608,6 @@ func (d *Supervisor) RunHTTP() error {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Address is required"})
 			return
 		}
-
-		//for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
-		//	input1, _ := hex.DecodeString("c0d7fdac")
-		//	executeContractTransaction := core.NewTransactionContractBroker(addr, d.contractCreationMap[sid], big.NewInt(0), 1, input1)
-		//	executeContractTransaction.Gas = 500000
-		//	executeContractTransaction.GasPrice = big.NewInt(1)
-		//	var txs = []*core.Transaction{executeContractTransaction}
-		//	it := message.InjectTxs{
-		//		Txs:       txs,
-		//		ToShardID: sid,
-		//	}
-		//	itByte, err := json.Marshal(it)
-		//	if err != nil {
-		//		log.Panic(err)
-		//	}
-		//	send_msg := message.MergeMessage(message.CInject, itByte)
-		//	go networks.TcpDial(send_msg, d.Ip_nodeTable[sid][0])
-		//}
-		//
-		//required_cnt := 2 * ((d.ChainConfig.ShardNums - 1) / 3)
-		//f := false
-		//now := time.Now()
-		//for time.Since(now) < time.Second*15 {
-		//	d.contractAllowMapMutex.Lock()
-		//	count := uint64(0)
-		//	for _, v := range d.contractAllowMap {
-		//		if _, exists := v[addr]; exists {
-		//			count++
-		//		}
-		//	}
-		//	d.contractAllowMapMutex.Unlock()
-		//	if count >= required_cnt {
-		//		f = true
-		//		break
-		//	}
-		//	time.Sleep(time.Millisecond * 100)
-		//}
-		//if f {
 		broker := d.ComMod.(*committee.BrokerCommitteeMod_b2e).Broker
 		d.ComMod.(*committee.BrokerCommitteeMod_b2e).BrokerBalanceLock.Lock()
 		if !broker.IsBroker(addr) {
@@ -1644,10 +1630,38 @@ func (d *Supervisor) RunHTTP() error {
 		d.ComMod.(*committee.BrokerCommitteeMod_b2e).BrokerBalanceLock.Unlock()
 
 		c.JSON(http.StatusOK, gin.H{"message": "申请成为Broker成功!"})
-		//} else {
-		//	c.JSON(http.StatusOK, gin.H{"error": "申请成为Broker失败！"})
-		//}
-		return
+	})
+
+	router.GET("/applybroker2", func(c *gin.Context) {
+
+		addr := c.Query("addr")
+		d := c.MustGet("supervisor").(*Supervisor)
+		if addr == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Address is required"})
+			return
+		}
+		broker := d.ComMod.(*committee.BrokerhubCommitteeMod).Broker
+		d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Lock()
+		if !broker.IsBroker(addr) {
+			broker.BrokerAddress = append([]string{addr}, broker.BrokerAddress...)
+
+			broker.BrokerBalance[addr] = make(map[uint64]*big.Int)
+			for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
+				broker.BrokerBalance[addr][sid] = new(big.Int).Set(big.NewInt(0))
+			}
+			broker.LockBalance[addr] = make(map[uint64]*big.Int)
+			for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
+				broker.LockBalance[addr][sid] = new(big.Int).Set(big.NewInt(0))
+			}
+
+			broker.ProfitBalance[addr] = make(map[uint64]*big.Float)
+			for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
+				broker.ProfitBalance[addr][sid] = new(big.Float).Set(big.NewFloat(0))
+			}
+		}
+		d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Unlock()
+
+		c.JSON(http.StatusOK, gin.H{"message": "申请成为Broker成功!"})
 	})
 
 	//申请成为broker/质押更多的钱

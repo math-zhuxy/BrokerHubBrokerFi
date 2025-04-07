@@ -33,9 +33,7 @@ type BrokerhubCommitteeMod struct {
 	batchDataNum int
 
 	//Broker related  attributes avatar
-	Broker *broker.Broker
-	// The state of broker joining brokerhub
-	BrokerHubStates       map[string]bool
+	Broker                *broker.Broker
 	brokerConfirm1Pool    map[string]*message.Mag1Confirm
 	brokerConfirm2Pool    map[string]*message.Mag2Confirm
 	restBrokerRawMegPool  []*message.BrokerRawMeg
@@ -62,7 +60,7 @@ type BrokerhubCommitteeMod struct {
 const brokerHubAccountId string = "40ce7569d555dbf939e58867be78fd76142df821"
 
 func NewBrokerhubCommitteeMod(Ip_nodeTable map[uint64]map[uint64]string, Ss *signal.StopSignal, sl *supervisor_log.SupervisorLog, csvFilePath string, dataNum, batchNum int) *BrokerhubCommitteeMod {
-
+	fmt.Println("Using Brokerhub Supervisor")
 	broker := new(broker.Broker)
 	broker.NewBroker(nil)
 	result_lockBalance := make(map[string][]string)
@@ -95,6 +93,8 @@ func NewBrokerhubCommitteeMod(Ip_nodeTable map[uint64]map[uint64]string, Ss *sig
 		block_txs[uint64(i)] = make([]string, 0)
 		block_txs[uint64(i)] = append(block_txs[uint64(i)], "txExcuted, broker1Txs, broker2Txs, allocatedTxs")
 	}
+	// 初始化账户加入BrokerHub的表
+	mytool.BrokerHubJoinState = make(map[string]uint)
 
 	return &BrokerhubCommitteeMod{
 		csvPath:               csvFilePath,
@@ -233,59 +233,6 @@ func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
 		bcm.txSending(itx)
 
 	}
-
-	// for {
-	// 	time.Sleep(time.Millisecond * 1000)
-	// }
-	// txfile, err := os.Open(bcm.csvPath)
-	// if err != nil {
-	// 	log.Panic(err)
-	// }
-	// defer txfile.Close()
-	// reader := csv.NewReader(txfile)
-	// txlist := make([]*core.Transaction, 0) // save the txs in this epoch (round)
-	// recoderNum := 0
-	// oldNum := 0
-	// for {
-	// 	data, err := reader.Read()
-	// 	if err == io.EOF {
-	// 		break
-	// 	}
-	// 	if err != nil {
-	// 		log.Panic(err)
-	// 	}
-	// 	if tx, ok := data2tx(data, uint64(bcm.nowDataNum)); ok {
-	// 		txlist = append(txlist, tx)
-	// 		bcm.nowDataNum++
-	// 		bcm.dataTxNums++
-	// 	} else {
-	// 		continue
-	// 	}
-	// 	// batch sending condition
-	// 	if len(txlist) == int(bcm.batchDataNum) || bcm.dataTxNums == bcm.dataTotalNum {
-	// 		itx := bcm.dealTxByBroker(txlist)
-	// 		bcm.txSending(itx)
-	// 		txlist = make([]*core.Transaction, 0)
-	// 		bcm.Ss.StopGap_Reset()
-	// 	}
-	// 	if bcm.dataTxNums == bcm.dataTotalNum {
-	// 		for len(bcm.restBrokerRawMegPool) != 0 {
-	// 			if len(bcm.restBrokerRawMegPool) == oldNum {
-	// 				recoderNum++
-	// 			} else {
-	// 				recoderNum = 0
-	// 			}
-	// 			bcm.dealTxByBroker(txlist)
-	// 			println("brokerTx value is ", bcm.restBrokerRawMegPool[0].Tx.Value.String())
-	// 			time.Sleep(time.Second)
-	// 			oldNum = len(bcm.restBrokerRawMegPool)
-	// 			if recoderNum >= 5 {
-	// 				break
-	// 			}
-	// 		}
-	// 		break
-	// 	}
-	// }
 
 }
 
