@@ -5,12 +5,13 @@ import (
 	"blockEmulator/core"
 	"blockEmulator/mytool"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"math/big"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type InputTransaction struct {
@@ -20,10 +21,32 @@ type InputTransaction struct {
 	Fee   string `json:"fee" binding:"required"`
 }
 
+type joinToBrokerHubMeg struct {
+	BrokerId string `json:"id" binding:"required"`
+}
+
 var (
 	LastInvokeTime      = make(map[string]time.Time)
 	LastInvokeTimeMutex sync.Mutex
 )
+
+func JoinToBrokerhub(c *gin.Context) {
+	var msg joinToBrokerHubMeg
+	if err := c.ShouldBindJSON(&msg); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+	fmt.Println("Get Join Brokerhub Request")
+	mytool.JoinToBrokerhubRequest = append(mytool.JoinToBrokerhubRequest, msg.BrokerId)
+	c.JSON(
+		http.StatusOK,
+		gin.H{
+			"status": "done",
+		},
+	)
+}
 
 func SendTx2Network(c *gin.Context) {
 	var it InputTransaction

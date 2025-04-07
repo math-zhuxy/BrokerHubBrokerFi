@@ -23,10 +23,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"io"
 	"log"
 	"math/big"
@@ -38,6 +34,11 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type Supervisor struct {
@@ -1166,10 +1167,10 @@ func (d *Supervisor) RunHTTP() error {
 
 			inp, _ := hex.DecodeString(input[2:])
 			fmt.Println("value为", bigInt.Uint64())
-			fmt.Println("from:",from,",to:",to,)
+			fmt.Println("from:", from, ",to:", to)
 			//fmt.Println("utils.Addr2Shard(from):",strconv.Itoa(utils.Addr2Shard(from)),",utils.Addr2Shard(to):",strconv.Itoa(utils.Addr2Shard(to)))
-			fmt.Println("params.ShardNum:",strconv.Itoa(params.ShardNum))
-			fmt.Println("params.ShardNum:",params.ShardNum)
+			fmt.Println("params.ShardNum:", strconv.Itoa(params.ShardNum))
+			fmt.Println("params.ShardNum:", params.ShardNum)
 			Transaction := core.NewTransactionContract(from, to, &bigInt, 1, inp)
 			Transaction.GasPrice = big.NewInt(1)
 			Transaction.Gas = 100000000
@@ -1382,6 +1383,8 @@ func (d *Supervisor) RunHTTP() error {
 
 	router := r.Group("/broker-fi")
 
+	router.POST("/JoinToBrokerhub", service.JoinToBrokerhub)
+
 	router.GET("/querynodeinfo", func(c *gin.Context) {
 		res := make(map[string]message.NodeInfo)
 		NodeInfoMapLock.Lock()
@@ -1534,10 +1537,10 @@ func (d *Supervisor) RunHTTP() error {
 
 		n := big.NewInt(int64(Balance))
 
-				r := ReturnAccountState{
-					AccountAddr: addr,
-					Balance:     n.String(),
-				}
+		r := ReturnAccountState{
+			AccountAddr: addr,
+			Balance:     n.String(),
+		}
 		//wei, _ := big.NewInt(0).SetString("1000000000000000000", 10)
 		//n.Mul(n, wei)
 

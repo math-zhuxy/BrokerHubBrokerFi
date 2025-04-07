@@ -33,7 +33,9 @@ type BrokerhubCommitteeMod struct {
 	batchDataNum int
 
 	//Broker related  attributes avatar
-	Broker                *broker.Broker
+	Broker *broker.Broker
+	// The state of broker joining brokerhub
+	BrokerHubStates       map[string]bool
 	brokerConfirm1Pool    map[string]*message.Mag1Confirm
 	brokerConfirm2Pool    map[string]*message.Mag2Confirm
 	restBrokerRawMegPool  []*message.BrokerRawMeg
@@ -56,6 +58,8 @@ type BrokerhubCommitteeMod struct {
 	LastInvokeTime       map[string]time.Time
 	LastInvokeTimeMutex  sync.Mutex
 }
+
+const brokerHubAccountId string = "40ce7569d555dbf939e58867be78fd76142df821"
 
 func NewBrokerhubCommitteeMod(Ip_nodeTable map[uint64]map[uint64]string, Ss *signal.StopSignal, sl *supervisor_log.SupervisorLog, csvFilePath string, dataNum, batchNum int) *BrokerhubCommitteeMod {
 
@@ -157,6 +161,34 @@ func (bcm *BrokerhubCommitteeMod) txSending(txlist []*core.Transaction) {
 	}
 }
 
+func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhub() {
+	mytool.RequestLock.Lock()
+	if len(mytool.JoinToBrokerhubRequest) != 0 {
+		balance := big.NewInt(0)
+		for _, val := range mytool.JoinToBrokerhubRequest {
+			acc_balances, exist := bcm.Broker.BrokerBalance[val]
+			if !exist {
+				continue
+			}
+			for _, val := range acc_balances {
+				balance.Add(balance, val)
+			}
+			bcm.sl.Slog.Printf("account %s join to brokerhub", val)
+		}
+		bcm.BrokerBalanceLock.Lock()
+		bcm.Broker.BrokerBalance[brokerHubAccountId][0].Add(
+			bcm.Broker.BrokerBalance[brokerHubAccountId][0],
+			balance,
+		)
+		bcm.BrokerBalanceLock.Unlock()
+	}
+
+	// reset join brokerhub list
+	mytool.JoinToBrokerhubRequest = mytool.JoinToBrokerhubRequest[:0]
+
+	mytool.RequestLock.Unlock()
+}
+
 func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
 
 	go func() {
@@ -180,6 +212,8 @@ func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
 	for {
 
 		time.Sleep(time.Millisecond * 100)
+
+		bcm.JoiningToBrokerhub()
 
 		mytool.Mutex1.Lock()
 		if len(mytool.UserRequestB2EQueue) == 0 {
