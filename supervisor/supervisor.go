@@ -1386,13 +1386,27 @@ func (d *Supervisor) RunHTTP() error {
 
 	// Join BrokerHub
 	router.POST("/JoinToBrokerhub", func(ctx *gin.Context) {
-		var msg service.JoinToBrokerHubMeg
+		var msg service.BrokerInfoInHub
 		if err := ctx.ShouldBindJSON(&msg); err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		res := d.ComMod.(*committee.BrokerhubCommitteeMod).JoiningToBrokerhub(msg.BrokerId, msg.BrokerHubId)
 		ctx.JSON(http.StatusOK, gin.H{"msg": res})
+	})
+
+	// 查询brokerhub的收益
+	router.GET("/queryrevenueinbrokerhub", func(ctx *gin.Context) {
+		var msg service.BrokerInfoInHub
+		if err := ctx.ShouldBindJSON(&msg); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		fund, earn := d.ComMod.(*committee.BrokerhubCommitteeMod).GetBrokerInfomationInHub(
+			msg.BrokerId,
+			msg.BrokerHubId,
+		)
+		ctx.JSON(http.StatusOK, gin.H{"revenue": earn, "fund": fund})
 	})
 
 	router.GET("/querynodeinfo", func(c *gin.Context) {

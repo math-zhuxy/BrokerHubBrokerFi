@@ -21,7 +21,7 @@ type InputTransaction struct {
 	Fee   string `json:"fee" binding:"required"`
 }
 
-type JoinToBrokerHubMeg struct {
+type BrokerInfoInHub struct {
 	BrokerId    string `json:"b_id" binding:"required"`
 	BrokerHubId string `json:"hub_id" binding:"required"`
 }
