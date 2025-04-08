@@ -18,6 +18,7 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,9 +56,18 @@ type BrokerhubCommitteeMod struct {
 	Result_Profit        map[string][]string
 	LastInvokeTime       map[string]time.Time
 	LastInvokeTimeMutex  sync.Mutex
+
+	// Broker infomation in BrokerHub
+	BrokerInfoListInBrokerHub map[string][]*message.BrokerInfoInBrokerhub
+
+	// BorkerHub List
+	BrokerHubAccountList []utils.Address
+
+	// Broker加入Brokerhub的状态
+	BrokerJoinBrokerHubState map[string]string
 }
 
-const brokerHubAccountId string = "40ce7569d555dbf939e58867be78fd76142df821"
+// const brokerHubAccountId string = "40ce7569d555dbf939e58867be78fd76142df821"
 
 func NewBrokerhubCommitteeMod(Ip_nodeTable map[uint64]map[uint64]string, Ss *signal.StopSignal, sl *supervisor_log.SupervisorLog, csvFilePath string, dataNum, batchNum int) *BrokerhubCommitteeMod {
 	fmt.Println("Using Brokerhub Supervisor")
@@ -93,8 +103,11 @@ func NewBrokerhubCommitteeMod(Ip_nodeTable map[uint64]map[uint64]string, Ss *sig
 		block_txs[uint64(i)] = make([]string, 0)
 		block_txs[uint64(i)] = append(block_txs[uint64(i)], "txExcuted, broker1Txs, broker2Txs, allocatedTxs")
 	}
-	// 初始化账户加入BrokerHub的表
-	mytool.BrokerHubJoinState = make(map[string]int)
+
+	broker_info_list_in_hub := make(map[string][]*message.BrokerInfoInBrokerhub)
+
+	broker_info_list_in_hub["40ce7569d555dbf939e58867be78fd76142df821"] = make([]*message.BrokerInfoInBrokerhub, 0)
+	broker_info_list_in_hub["c49a0f384cdfbe5cef14dc663639af7d11ec11d0"] = make([]*message.BrokerInfoInBrokerhub, 0)
 
 	return &BrokerhubCommitteeMod{
 		csvPath:               csvFilePath,
@@ -115,6 +128,13 @@ func NewBrokerhubCommitteeMod(Ip_nodeTable map[uint64]map[uint64]string, Ss *sig
 		Result_brokerBalance:  result_brokerBalance,
 		Result_Profit:         result_Profit,
 		LastInvokeTime:        make(map[string]time.Time),
+
+		BrokerInfoListInBrokerHub: broker_info_list_in_hub,
+		BrokerHubAccountList: []string{
+			"40ce7569d555dbf939e58867be78fd76142df821",
+			"c49a0f384cdfbe5cef14dc663639af7d11ec11d0",
+		},
+		BrokerJoinBrokerHubState: make(map[string]string),
 	}
 
 }
@@ -158,58 +178,43 @@ func (bcm *BrokerhubCommitteeMod) txSending(txlist []*core.Transaction) {
 	}
 }
 
-func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhub() {
-	mytool.RequestLock.Lock()
-	if _, exist := bcm.Broker.BrokerBalance[brokerHubAccountId][0]; !exist {
-		mytool.RequestLock.Unlock()
-		return
-	}
-	if len(mytool.JoinToBrokerhubRequest) != 0 {
-		balance := big.NewInt(0)
-		for _, val := range mytool.JoinToBrokerhubRequest {
-			acc_balances, exist := bcm.Broker.BrokerBalance[val]
-			if !exist {
-				continue
-			}
-			for _, val := range acc_balances {
-				balance.Add(balance, val)
-			}
-			bcm.sl.Slog.Printf("account %s join to brokerhub", val)
-		}
-		bcm.BrokerBalanceLock.Lock()
-		bcm.Broker.BrokerBalance[brokerHubAccountId][0].Add(
-			bcm.Broker.BrokerBalance[brokerHubAccountId][0],
-			balance,
-		)
-		bcm.BrokerBalanceLock.Unlock()
+func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhub(broker_id string, brokerhub_id string) string {
+	if !slices.Contains(bcm.BrokerHubAccountList, brokerhub_id) {
+		return "hub not exist"
 	}
 
-	// reset join brokerhub list
-	mytool.JoinToBrokerhubRequest = mytool.JoinToBrokerhubRequest[:0]
+	if _, exist := bcm.BrokerJoinBrokerHubState[broker_id]; exist {
+		return "already in"
+	}
 
-	mytool.RequestLock.Unlock()
+	// 计算账户余额
+	broker_balance := big.NewInt(0)
+	bcm.BrokerBalanceLock.Lock()
+	broker_shard_balances, exist := bcm.Broker.BrokerBalance[broker_id]
+	if !exist {
+		return "not broker"
+	}
+	for _, balance := range broker_shard_balances {
+		broker_balance.Add(broker_balance, balance)
+	}
+	bcm.Broker.BrokerBalance[brokerhub_id][0].Add(
+		bcm.Broker.BrokerBalance[brokerhub_id][0],
+		broker_balance,
+	)
+
+	// 更新账户信息
+	brokerinfo := new(message.BrokerInfoInBrokerhub)
+	brokerinfo.BrokerAddr = broker_id
+	brokerinfo.BrokerBalance = new(big.Int).Set(broker_balance)
+	brokerinfo.BrokerProfit = big.NewFloat(0)
+	bcm.BrokerInfoListInBrokerHub[brokerhub_id] = append(
+		bcm.BrokerInfoListInBrokerHub[brokerhub_id],
+		brokerinfo,
+	)
+	bcm.BrokerJoinBrokerHubState[broker_id] = brokerhub_id
+	bcm.BrokerBalanceLock.Unlock()
+	return "done"
 }
-
-// func (bcm *BrokerhubCommitteeMod) deleteBrokerTxsInBrokerhub(meglist []*message.BrokerRawMeg) (reslist []*message.BrokerRawMeg) {
-// 	if len(mytool.BrokerHubJoinState) == 0 {
-// 		return meglist
-// 	}
-// 	reslist = make([]*message.BrokerRawMeg, 0)
-// 	for _, meg := range meglist {
-// 		IsInHub := false
-// 		for key, val := range mytool.BrokerHubJoinState {
-// 			if val >= 0 && key == meg.Broker {
-// 				IsInHub = true
-// 				break
-// 			}
-// 		}
-// 		if !IsInHub {
-// 			reslist = append(reslist, meg)
-// 		}
-// 	}
-// 	bcm.sl.Slog.Printf("delete %d len of TXs", len(meglist)-len(reslist))
-// 	return reslist
-// }
 
 func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
 
@@ -229,8 +234,6 @@ func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
 	for {
 
 		time.Sleep(time.Millisecond * 100)
-
-		bcm.JoiningToBrokerhub()
 
 		mytool.Mutex1.Lock()
 		if len(mytool.UserRequestB2EQueue) == 0 {
@@ -252,7 +255,6 @@ func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
 	}
 
 }
-
 func (bcm *BrokerhubCommitteeMod) HandleBlockInfo(b *message.BlockInfoMsg) {
 
 	bcm.sl.Slog.Printf("received from shard %d in epoch %d.\n", b.SenderShardID, b.Epoch)
@@ -293,6 +295,22 @@ func (bcm *BrokerhubCommitteeMod) HandleBlockInfo(b *message.BlockInfoMsg) {
 	bcm.BrokerBalanceLock.Unlock()
 	bcm.BrokerModuleLock.Unlock()
 	bcm.createConfirm(txs)
+}
+
+func (bcm *BrokerhubCommitteeMod) handleBrokerInBrokerHub() (temp_map map[string]map[uint64]*big.Int) {
+	temp_map = make(map[string]map[uint64]*big.Int)
+	for key, val := range bcm.Broker.BrokerBalance {
+		IsInHub := false
+		for broker_id := range bcm.BrokerJoinBrokerHubState {
+			if broker_id == key {
+				IsInHub = true
+			}
+		}
+		if !IsInHub {
+			temp_map[key] = val
+		}
+	}
+	return temp_map
 }
 
 func (bcm *BrokerhubCommitteeMod) createConfirm(txs []*core.Transaction) {
@@ -367,21 +385,8 @@ func (bcm *BrokerhubCommitteeMod) dealTxByBroker(txs []*core.Transaction) (itxs 
 	}
 
 	//println("1brokerSize ", len(brokerRawMegs))
-	temp_balance_map := make(map[string]map[uint64]*big.Int)
-	for key, val := range bcm.Broker.BrokerBalance {
-		IsInHub := false
-		for brokerid := range mytool.BrokerHubJoinState {
-			if key == brokerid {
-				IsInHub = true
-				break
-			}
-		}
-		if !IsInHub {
-			temp_balance_map[key] = val
-		}
-	}
 	now := time.Now()
-	alloctedBrokerRawMegs, restBrokerRawMeg := Broker2Earn.B2E(brokerRawMegs, temp_balance_map)
+	alloctedBrokerRawMegs, restBrokerRawMeg := Broker2Earn.B2E(brokerRawMegs, bcm.handleBrokerInBrokerHub())
 	println("b2e consume time(millsec.) ", time.Since(now).Milliseconds())
 	bcm.restBrokerRawMegPool = append(bcm.restBrokerRawMegPool, restBrokerRawMeg...)
 
@@ -439,23 +444,9 @@ func (bcm *BrokerhubCommitteeMod) dealTxByBroker2(txs []*core.Transaction) (itxs
 		}
 	}
 
-	temp_balance_map := make(map[string]map[uint64]*big.Int)
-	for key, val := range bcm.Broker.BrokerBalance {
-		IsInHub := false
-		for brokerid := range mytool.BrokerHubJoinState {
-			if key == brokerid {
-				IsInHub = true
-				break
-			}
-		}
-		if !IsInHub {
-			temp_balance_map[key] = val
-		}
-	}
-
 	// brokerRawMegs = bcm.deleteBrokerTxsInBrokerhub(brokerRawMegs)
 	now := time.Now()
-	alloctedBrokerRawMegs, restBrokerRawMeg := Broker2Earn.B2E(brokerRawMegs, temp_balance_map)
+	alloctedBrokerRawMegs, restBrokerRawMeg := Broker2Earn.B2E(brokerRawMegs, bcm.handleBrokerInBrokerHub())
 	println("b2e consume time(millsec.) ", time.Since(now).Milliseconds())
 	bcm.restBrokerRawMegPool2 = append(bcm.restBrokerRawMegPool2, restBrokerRawMeg...)
 

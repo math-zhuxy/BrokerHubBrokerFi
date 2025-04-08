@@ -1385,7 +1385,15 @@ func (d *Supervisor) RunHTTP() error {
 	router := r.Group("/broker-fi")
 
 	// Join BrokerHub
-	router.POST("/JoinToBrokerhub", service.JoinToBrokerhub)
+	router.POST("/JoinToBrokerhub", func(ctx *gin.Context) {
+		var msg service.JoinToBrokerHubMeg
+		if err := ctx.ShouldBindJSON(&msg); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		res := d.ComMod.(*committee.BrokerhubCommitteeMod).JoiningToBrokerhub(msg.BrokerId, msg.BrokerHubId)
+		ctx.JSON(http.StatusOK, gin.H{"msg": res})
+	})
 
 	router.GET("/querynodeinfo", func(c *gin.Context) {
 		res := make(map[string]message.NodeInfo)

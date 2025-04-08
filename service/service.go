@@ -21,44 +21,15 @@ type InputTransaction struct {
 	Fee   string `json:"fee" binding:"required"`
 }
 
-type joinToBrokerHubMeg struct {
-	BrokerId string `json:"id" binding:"required"`
+type JoinToBrokerHubMeg struct {
+	BrokerId    string `json:"b_id" binding:"required"`
+	BrokerHubId string `json:"hub_id" binding:"required"`
 }
 
 var (
 	LastInvokeTime      = make(map[string]time.Time)
 	LastInvokeTimeMutex sync.Mutex
 )
-
-func JoinToBrokerhub(c *gin.Context) {
-	fmt.Println("Get Join Brokerhub Request")
-	var msg joinToBrokerHubMeg
-	if err := c.ShouldBindJSON(&msg); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err": err.Error(),
-		})
-		return
-	}
-	if _, exist := mytool.BrokerHubJoinState[msg.BrokerId]; exist {
-		c.JSON(
-			http.StatusOK,
-			gin.H{
-				"status": "alreadyin",
-			},
-		)
-		return
-	}
-	mytool.BrokerHubJoinState[msg.BrokerId] = 0
-	mytool.RequestLock.Lock()
-	mytool.JoinToBrokerhubRequest = append(mytool.JoinToBrokerhubRequest, msg.BrokerId)
-	mytool.RequestLock.Unlock()
-	c.JSON(
-		http.StatusOK,
-		gin.H{
-			"status": "done",
-		},
-	)
-}
 
 func SendTx2Network(c *gin.Context) {
 	var it InputTransaction
