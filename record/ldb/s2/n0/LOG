@@ -1,6 +1,11 @@
-=============== Apr 7, 2025 (CST) ===============
-21:32:49.179729 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-21:32:49.287723 db@open opening
-21:32:49.288802 version@stat F·[] S·0B[] Sc·[]
-21:32:49.294160 db@janitor F·2 G·0
-21:32:49.294160 db@open done T·6.4371ms
+=============== Apr 8, 2025 (CST) ===============
+11:30:34.175934 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+11:30:34.525068 db@open opening
+11:30:34.526174 version@stat F·[] S·0B[] Sc·[]
+11:30:34.533865 db@janitor F·2 G·0
+11:30:34.535455 db@open done T·10.3875ms
+11:32:17.506973 memdb@flush N·22593 S·3MiB
+11:32:17.571943 memdb@flush created L0@3 N·22593 S·3MiB "\x00\x03\xe6..4ɵ,v15136":"\xff\xfd\x92..\xf6>\x8d,v5844"
+11:32:17.571943 version@stat F·[1] S·3MiB[3MiB] Sc·[0.25]
+11:32:17.573596 memdb@flush committed F·1 T·66.6221ms
+11:32:17.575260 journal@remove removed @1

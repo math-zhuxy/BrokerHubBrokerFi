@@ -1384,6 +1384,7 @@ func (d *Supervisor) RunHTTP() error {
 
 	router := r.Group("/broker-fi")
 
+	// Join BrokerHub
 	router.POST("/JoinToBrokerhub", service.JoinToBrokerhub)
 
 	router.GET("/querynodeinfo", func(c *gin.Context) {
@@ -1460,6 +1461,7 @@ func (d *Supervisor) RunHTTP() error {
 
 	})
 
+	// BrokerHub
 	router.GET("/querybrokerprofit3", func(c *gin.Context) {
 		d := c.MustGet("supervisor").(*Supervisor)
 		addr := c.Query("addr")
@@ -1632,6 +1634,7 @@ func (d *Supervisor) RunHTTP() error {
 		c.JSON(http.StatusOK, gin.H{"message": "申请成为Broker成功!"})
 	})
 
+	// BrokerHub
 	router.GET("/applybroker2", func(c *gin.Context) {
 
 		addr := c.Query("addr")

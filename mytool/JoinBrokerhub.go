@@ -4,6 +4,6 @@ import "sync"
 
 var (
 	JoinToBrokerhubRequest []string
-	BrokerHubJoinState     map[string]uint
+	BrokerHubJoinState     map[string]int
 	RequestLock            sync.Mutex
 )
