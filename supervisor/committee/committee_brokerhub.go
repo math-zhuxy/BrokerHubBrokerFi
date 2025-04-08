@@ -202,7 +202,12 @@ func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhub(broker_id string, brokerhub
 	if !exist {
 		return "not broker"
 	}
+
+	if _, exist := bcm.Broker.BrokerBalance[brokerhub_id]; !exist {
+		return "hub not init"
+	}
 	bcm.BrokerBalanceLock.Lock()
+	defer bcm.BrokerBalanceLock.Unlock()
 	bcm.Broker.BrokerBalance[brokerhub_id][0].Add(
 		bcm.Broker.BrokerBalance[brokerhub_id][0],
 		broker_balance,
@@ -219,7 +224,6 @@ func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhub(broker_id string, brokerhub
 	)
 
 	bcm.BrokerJoinBrokerHubState[broker_id] = brokerhub_id
-	bcm.BrokerBalanceLock.Unlock()
 	return "done"
 }
 
@@ -253,7 +257,6 @@ func (bcm *BrokerhubCommitteeMod) allocateBrokerhubRevenue(addr string, ssid uin
 }
 
 func (bcm *BrokerhubCommitteeMod) GetBrokerInfomationInHub(broker_id string, hub_id string) (uint64, float64) {
-	bcm.BrokerBalanceLock.Lock()
 	fund := uint64(0)
 	earn := float64(0)
 	if !slices.Contains(bcm.BrokerHubAccountList, hub_id) {
@@ -266,7 +269,7 @@ func (bcm *BrokerhubCommitteeMod) GetBrokerInfomationInHub(broker_id string, hub
 			earn, _ = brokerinfo.BrokerProfit.Float64()
 		}
 	}
-	bcm.BrokerBalanceLock.Unlock()
+
 	return fund, earn
 }
 
