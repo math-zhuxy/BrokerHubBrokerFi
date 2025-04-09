@@ -1395,6 +1395,17 @@ func (d *Supervisor) RunHTTP() error {
 		ctx.JSON(http.StatusOK, gin.H{"msg": res})
 	})
 
+	// Exit BrokerHub
+	router.POST("/ExitBrokerHub", func(ctx *gin.Context) {
+		var msg service.BrokerInfoInHub
+		if err := ctx.ShouldBindJSON(&msg); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		res := d.ComMod.(*committee.BrokerhubCommitteeMod).ExitingBrokerHub(msg.BrokerId, msg.BrokerHubId)
+		ctx.JSON(http.StatusOK, gin.H{"msg": res})
+	})
+
 	// 查询brokerhub的收益
 	router.GET("/queryrevenueinbrokerhub", func(ctx *gin.Context) {
 		var msg service.BrokerInfoInHub
@@ -1595,34 +1606,6 @@ func (d *Supervisor) RunHTTP() error {
 		c.JSON(http.StatusOK, r)
 		//c.JSON(http.StatusOK, gin.H{"error": ret})
 	})
-
-	//router.GET("/applybroker", func(c *gin.Context) {
-	//	time.Sleep(time.Second*1)
-	//	addr := c.Query("addr")
-	//	d := c.MustGet("supervisor").(*Supervisor)
-	//
-	//	broker := d.ComMod.(*committee.BrokerCommitteeMod_b2e).Broker
-	//	d.ComMod.(*committee.BrokerCommitteeMod_b2e).BrokerBalanceLock.Lock()
-	//	if !broker.IsBroker(addr) {
-	//		broker.BrokerAddress = append([]string{addr}, broker.BrokerAddress...)
-	//
-	//		broker.BrokerBalance[addr] = make(map[uint64]*big.Int)
-	//		for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
-	//			broker.BrokerBalance[addr][sid] = new(big.Int).Set(big.NewInt(0))
-	//		}
-	//		broker.LockBalance[addr] = make(map[uint64]*big.Int)
-	//		for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
-	//			broker.LockBalance[addr][sid] = new(big.Int).Set(big.NewInt(0))
-	//		}
-	//
-	//		broker.ProfitBalance[addr] = make(map[uint64]*big.Float)
-	//		for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
-	//			broker.ProfitBalance[addr][sid] = new(big.Float).Set(big.NewFloat(0))
-	//		}
-	//	}
-	//	d.ComMod.(*committee.BrokerCommitteeMod_b2e).BrokerBalanceLock.Unlock()
-	//	c.JSON(http.StatusOK, gin.H{"message": "申请成为Broker成功!"})
-	//})
 
 	router.GET("/applybroker", func(c *gin.Context) {
 

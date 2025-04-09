@@ -176,21 +176,30 @@ func (bcm *BrokerhubCommitteeMod) txSending(txlist []*core.Transaction) {
 	}
 }
 
-func (bcm *BrokerhubCommitteeMod) calculateTotalBalance(addr string) (*big.Int, bool) {
+func (bcm *BrokerhubCommitteeMod) calculateTotalBalance(addr string) *big.Int {
 	BrokerBalance := big.NewInt(0)
-	broker_shard_balances, exist := bcm.Broker.BrokerBalance[addr]
-	if !exist {
-		return BrokerBalance, false
-	}
-	for _, balance := range broker_shard_balances {
+	for _, balance := range bcm.Broker.BrokerBalance[addr] {
 		BrokerBalance.Add(BrokerBalance, balance)
 	}
-	return BrokerBalance, true
+	return BrokerBalance
+}
+
+func (bcm *BrokerhubCommitteeMod) judgeBrokerhubInfo(broker_id string, brokerhub_id string) (string, bool) {
+	if !slices.Contains(bcm.BrokerHubAccountList, brokerhub_id) {
+		return "hub not exist", false
+	}
+	if _, exist := bcm.Broker.BrokerBalance[brokerhub_id]; !exist {
+		return "hub not init", false
+	}
+	if _, exist := bcm.Broker.BrokerBalance[broker_id]; !exist {
+		return "not broker", false
+	}
+	return "", true
 }
 
 func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhub(broker_id string, brokerhub_id string) string {
-	if !slices.Contains(bcm.BrokerHubAccountList, brokerhub_id) {
-		return "hub not exist"
+	if res, ok := bcm.judgeBrokerhubInfo(broker_id, brokerhub_id); !ok {
+		return res
 	}
 
 	if _, exist := bcm.BrokerJoinBrokerHubState[broker_id]; exist {
@@ -198,14 +207,7 @@ func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhub(broker_id string, brokerhub
 	}
 
 	// 计算账户余额
-	broker_balance, exist := bcm.calculateTotalBalance(broker_id)
-	if !exist {
-		return "not broker"
-	}
-
-	if _, exist := bcm.Broker.BrokerBalance[brokerhub_id]; !exist {
-		return "hub not init"
-	}
+	broker_balance := bcm.calculateTotalBalance(broker_id)
 	bcm.BrokerBalanceLock.Lock()
 	defer bcm.BrokerBalanceLock.Unlock()
 	bcm.Broker.BrokerBalance[brokerhub_id][0].Add(
@@ -224,6 +226,29 @@ func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhub(broker_id string, brokerhub
 	)
 
 	bcm.BrokerJoinBrokerHubState[broker_id] = brokerhub_id
+	return "done"
+}
+
+func (bcm *BrokerhubCommitteeMod) ExitingBrokerHub(broker_id string, brokerhub_id string) string {
+	if res, ok := bcm.judgeBrokerhubInfo(broker_id, brokerhub_id); !ok {
+		return res
+	}
+	{
+		hub_id, exist := bcm.BrokerJoinBrokerHubState[broker_id]
+		if !exist {
+			return "not in hub"
+		}
+		if hub_id != brokerhub_id {
+			return "hub id error"
+		}
+	}
+	bcm.BrokerInfoListInBrokerHub[brokerhub_id] = slices.DeleteFunc(
+		bcm.BrokerInfoListInBrokerHub[brokerhub_id],
+		func(x *message.BrokerInfoInBrokerhub) bool {
+			return x.BrokerAddr == broker_id
+		},
+	)
+	delete(bcm.BrokerJoinBrokerHubState, broker_id)
 	return "done"
 }
 
@@ -269,7 +294,6 @@ func (bcm *BrokerhubCommitteeMod) GetBrokerInfomationInHub(broker_id string, hub
 			earn, _ = brokerinfo.BrokerProfit.Float64()
 		}
 	}
-
 	return fund, earn
 }
 
