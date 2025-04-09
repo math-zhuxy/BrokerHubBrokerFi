@@ -1406,18 +1406,15 @@ func (d *Supervisor) RunHTTP() error {
 		ctx.JSON(http.StatusOK, gin.H{"msg": res})
 	})
 
-	// 查询brokerhub的收益
-	router.GET("/queryrevenueinbrokerhub", func(ctx *gin.Context) {
-		var msg service.BrokerInfoInHub
-		if err := ctx.ShouldBindJSON(&msg); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// 查询broker情况
+	router.GET("/QueryBrokerInfoInHub", func(ctx *gin.Context) {
+		addr := ctx.Query("addr")
+		if addr == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Address is required"})
 			return
 		}
-		fund, earn := d.ComMod.(*committee.BrokerhubCommitteeMod).GetBrokerInfomationInHub(
-			msg.BrokerId,
-			msg.BrokerHubId,
-		)
-		ctx.JSON(http.StatusOK, gin.H{"revenue": earn, "fund": fund})
+		fund, earn, brokerhub_id := d.ComMod.(*committee.BrokerhubCommitteeMod).GetBrokerInfomationInHub(addr)
+		ctx.JSON(http.StatusOK, gin.H{"revenue": earn, "fund": fund, "hub_id": brokerhub_id})
 	})
 
 	router.GET("/querynodeinfo", func(c *gin.Context) {
@@ -1677,14 +1674,14 @@ func (d *Supervisor) RunHTTP() error {
 		d := c.MustGet("supervisor").(*Supervisor)
 		addr := c.Query("addr")
 
-		d.ComMod.(*committee.BrokerCommitteeMod_b2e).BrokerBalanceLock.Lock()
-		isBroker := d.ComMod.(*committee.BrokerCommitteeMod_b2e).Broker.IsBroker(addr)
+		d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Lock()
+		isBroker := d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.IsBroker(addr)
 		if !isBroker {
 			c.JSON(http.StatusOK, gin.H{"error": "not a broker,cannot invoke Stake!"})
-			d.ComMod.(*committee.BrokerCommitteeMod_b2e).BrokerBalanceLock.Unlock()
+			d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Unlock()
 			return
 		}
-		d.ComMod.(*committee.BrokerCommitteeMod_b2e).BrokerBalanceLock.Unlock()
+		d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Unlock()
 
 		token := c.Query("token") //申请质押的钱
 		if addr == "" {
@@ -1711,19 +1708,19 @@ func (d *Supervisor) RunHTTP() error {
 			return
 		}
 
-		d.ComMod.(*committee.BrokerCommitteeMod_b2e).LastInvokeTimeMutex.Lock()
-		invokeTime := d.ComMod.(*committee.BrokerCommitteeMod_b2e).LastInvokeTime
+		d.ComMod.(*committee.BrokerhubCommitteeMod).LastInvokeTimeMutex.Lock()
+		invokeTime := d.ComMod.(*committee.BrokerhubCommitteeMod).LastInvokeTime
 		if lastInvokeTime, exist := invokeTime[addr]; exist {
 			if time.Since(lastInvokeTime) < 15*time.Second {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Stake request too frequent! Please wait a moment !"})
-				d.ComMod.(*committee.BrokerCommitteeMod_b2e).LastInvokeTimeMutex.Unlock()
+				d.ComMod.(*committee.BrokerhubCommitteeMod).LastInvokeTimeMutex.Unlock()
 				return
 			}
-			d.ComMod.(*committee.BrokerCommitteeMod_b2e).LastInvokeTime[addr] = time.Now()
+			d.ComMod.(*committee.BrokerhubCommitteeMod).LastInvokeTime[addr] = time.Now()
 		} else {
-			d.ComMod.(*committee.BrokerCommitteeMod_b2e).LastInvokeTime[addr] = time.Now()
+			d.ComMod.(*committee.BrokerhubCommitteeMod).LastInvokeTime[addr] = time.Now()
 		}
-		d.ComMod.(*committee.BrokerCommitteeMod_b2e).LastInvokeTimeMutex.Unlock()
+		d.ComMod.(*committee.BrokerhubCommitteeMod).LastInvokeTimeMutex.Unlock()
 
 		fmt.Println(addr)
 		fmt.Println(token)
@@ -1774,14 +1771,14 @@ func (d *Supervisor) RunHTTP() error {
 			log.Panic(err2)
 		}
 		send_msg := message.MergeMessage(message.CInjectHead, itByte)
-		go networks.TcpDial(send_msg, d.ComMod.(*committee.BrokerCommitteeMod_b2e).IpNodeTable[Clt.GetAddr2ShardMap(addr)][0])
+		go networks.TcpDial(send_msg, d.ComMod.(*committee.BrokerhubCommitteeMod).IpNodeTable[Clt.GetAddr2ShardMap(addr)][0])
 
-		d.ComMod.(*committee.BrokerCommitteeMod_b2e).BrokerBalanceLock.Lock()
-		defer d.ComMod.(*committee.BrokerCommitteeMod_b2e).BrokerBalanceLock.Unlock()
+		d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Lock()
+		defer d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Unlock()
 
 		//添加各分片余额到broker数据结构中
 
-		broker := d.ComMod.(*committee.BrokerCommitteeMod_b2e).Broker
+		broker := d.ComMod.(*committee.BrokerhubCommitteeMod).Broker
 		if !broker.IsBroker(addr) {
 			broker.BrokerAddress = append([]string{addr}, broker.BrokerAddress...)
 

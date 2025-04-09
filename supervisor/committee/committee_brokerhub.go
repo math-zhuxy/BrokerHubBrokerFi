@@ -269,6 +269,9 @@ func (bcm *BrokerhubCommitteeMod) allocateBrokerhubRevenue(addr string, ssid uin
 	bcm.Broker.ProfitBalance[addr][ssid].Add(bcm.Broker.ProfitBalance[addr][ssid], BrokerHubRevenue)
 
 	// 计算每个Broker的收益
+	if len(bcm.BrokerInfoListInBrokerHub[addr]) == 0 {
+		return
+	}
 	BrokersRevenue := new(big.Float).Sub(fee, BrokerHubRevenue)
 	BrokerTotalBalanceInHub := big.NewFloat(0)
 	for _, brokerinfo := range bcm.BrokerInfoListInBrokerHub[addr] {
@@ -281,20 +284,20 @@ func (bcm *BrokerhubCommitteeMod) allocateBrokerhubRevenue(addr string, ssid uin
 	}
 }
 
-func (bcm *BrokerhubCommitteeMod) GetBrokerInfomationInHub(broker_id string, hub_id string) (uint64, float64) {
-	fund := uint64(0)
-	earn := float64(0)
-	if !slices.Contains(bcm.BrokerHubAccountList, hub_id) {
-		fund = 0
-		earn = 0
+func (bcm *BrokerhubCommitteeMod) GetBrokerInfomationInHub(broker_id string) (uint64, float64, string) {
+	brokerhub_id, exist := bcm.BrokerJoinBrokerHubState[broker_id]
+	if !exist {
+		return 0, 0, ""
 	}
-	for _, brokerinfo := range bcm.BrokerInfoListInBrokerHub[hub_id] {
+
+	for _, brokerinfo := range bcm.BrokerInfoListInBrokerHub[brokerhub_id] {
 		if brokerinfo.BrokerAddr == broker_id {
-			fund = brokerinfo.BrokerBalance.Uint64()
-			earn, _ = brokerinfo.BrokerProfit.Float64()
+			fund := brokerinfo.BrokerBalance.Uint64()
+			earn, _ := brokerinfo.BrokerProfit.Float64()
+			return fund, earn, brokerhub_id
 		}
 	}
-	return fund, earn
+	return 0, 0, ""
 }
 
 func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
