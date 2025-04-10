@@ -14,8 +14,8 @@ var (
 	DataWrite_path      = "./result/" // measurement data result output path
 	LogWrite_path       = "./log"     // log output path
 	KeyWrite_path       = "./key"
-	SupervisorAddr      = "127.0.0.1:18800"                                                     //supervisor ip address
-	FileInput           = `D:/SunYatSenUniversity/huanglab/block-emulator/selectedTxs_300K.csv` //the raw BlockTransaction data path
+	SupervisorAddr      = "127.0.0.1:18800" //supervisor ip address
+	FileInput           = "TXs.csv"         //the raw BlockTransaction data path
 	NodeID              uint64
 	ShardID             uint64
 )
