@@ -1,0 +1,9 @@
+panic: runtime error: index out of range [0] with length 0
+
+goroutine 68 [running]:
+blockEmulator/supervisor/committee.(*BrokerhubCommitteeMod).dealTxByBroker(0xc00060fc20, {0xc0001b4488, 0x64, 0x0?})
+        D:/SunYatSenUniversity/huanglab/BrokerHub/blockEmulatorB2E/supervisor/committee/committee_brokerhub.go:455 +0x9c7
+blockEmulator/supervisor/committee.(*BrokerhubCommitteeMod).MsgSendingControl.func1()
+        D:/SunYatSenUniversity/huanglab/BrokerHub/blockEmulatorB2E/supervisor/committee/committee_brokerhub.go:311 +0x45
+created by blockEmulator/supervisor/committee.(*BrokerhubCommitteeMod).MsgSendingControl in goroutine 65
+        D:/SunYatSenUniversity/huanglab/BrokerHub/blockEmulatorB2E/supervisor/committee/committee_brokerhub.go:305 +0x56

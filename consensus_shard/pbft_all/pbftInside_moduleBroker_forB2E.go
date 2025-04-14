@@ -37,7 +37,6 @@ func (rbhm *RawBrokerPbftExtraHandleMod_forB2E) HandleinPrePrepare(ppmsg *messag
 	rbhm.pbftNode.requestPool[string(ppmsg.Digest)] = ppmsg.RequestMsg
 	return true
 
-
 	if rbhm.pbftNode.CurChain.IsValidBlock(core.DecodeB(ppmsg.RequestMsg.Msg.Content)) != nil {
 		rbhm.pbftNode.pl.Plog.Printf("S%dN%d : not a valid block\n", rbhm.pbftNode.ShardID, rbhm.pbftNode.NodeID)
 		return false
