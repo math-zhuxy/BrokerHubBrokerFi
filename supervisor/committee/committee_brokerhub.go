@@ -372,7 +372,6 @@ func (bcm *BrokerhubCommitteeMod) HandleBlockInfo(b *message.BlockInfoMsg) {
 
 		fee = fee.Mul(fee, bcm.Broker.Brokerage)
 
-		// bcm.Broker.ProfitBalance[brokeraddress][sSid].Add(bcm.Broker.ProfitBalance[brokeraddress][sSid], fee)
 		bcm.allocateBrokerhubRevenue(brokeraddress, sSid, fee)
 
 	}
@@ -511,7 +510,6 @@ func (bcm *BrokerhubCommitteeMod) dealTxByBroker2(txs []*core.Transaction) (itxs
 
 		rSid := bcm.fetchModifiedMap(tx.Recipient)
 		sSid := bcm.fetchModifiedMap(tx.Sender)
-		//if rSid != sSid && !bcm.Broker.IsBroker(tx.Recipient) && !bcm.Broker.IsBroker(tx.Sender) {
 		if rSid != sSid {
 			brokerRawMeg := &message.BrokerRawMeg{
 				Tx:     tx,

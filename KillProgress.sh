@@ -1,2 +1,0 @@
-ps -ef | grep blockEmulator_Linux_Precompile | grep -v grep | awk '{print $2}' | xargs kill
-cd ~/ZXY_Workspace/BrokerFi &rm -r ./record  & rm -r ./key  &rm -r ./log &rm -r ./bytecode &rm blockEmulator_Linux_Precompile
