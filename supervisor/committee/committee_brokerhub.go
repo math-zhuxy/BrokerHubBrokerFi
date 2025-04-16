@@ -17,12 +17,15 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	rand2 "math/rand"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // CLPA committee operations
@@ -197,7 +200,7 @@ func (bcm *BrokerhubCommitteeMod) calculateTotalBalance(addr string) *big.Int {
 
 func (bcm *BrokerhubCommitteeMod) init_brokerhub() {
 	for _, brokerhub_id := range bcm.BrokerHubAccountList {
-		bcm.Broker.BrokerAddress = append([]string{brokerhub_id}, bcm.Broker.BrokerAddress...)
+		bcm.Broker.BrokerAddress = append(bcm.Broker.BrokerAddress, brokerhub_id)
 
 		bcm.Broker.BrokerBalance[brokerhub_id] = make(map[uint64]*big.Int)
 		for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
@@ -272,12 +275,22 @@ func (bcm *BrokerhubCommitteeMod) ExitingBrokerHub(broker_id string, brokerhub_i
 			return "hub id error"
 		}
 	}
+	for _, brokerinfo := range bcm.BrokerInfoListInBrokerHub[brokerhub_id] {
+		if brokerinfo.BrokerAddr == broker_id {
+			bcm.Broker.BrokerBalance[brokerhub_id][0].Sub(
+				bcm.Broker.BrokerBalance[brokerhub_id][0],
+				brokerinfo.BrokerBalance,
+			)
+			break
+		}
+	}
 	bcm.BrokerInfoListInBrokerHub[brokerhub_id] = slices.DeleteFunc(
 		bcm.BrokerInfoListInBrokerHub[brokerhub_id],
 		func(x *message.BrokerInfoInBrokerhub) bool {
 			return x.BrokerAddr == broker_id
 		},
 	)
+
 	delete(bcm.BrokerJoinBrokerHubState, broker_id)
 	return "done"
 }
@@ -344,13 +357,51 @@ func (bcm *BrokerhubCommitteeMod) GetBrokerInfomationInHub(broker_id string) (ui
 	return 0, 0, ""
 }
 
+func (bcm *BrokerhubCommitteeMod) generateRandomTxs(size uint) []*core.Transaction {
+	if len(AddressSet) == 0 {
+		mu.Lock()
+		if len(AddressSet) == 0 {
+			AddressSet = make([]string, 20000)
+			for i := 0; i < 20000; i++ {
+				randomString, err := generateRandomHexString(40)
+				if err != nil {
+					fmt.Println("Error generating random string:", err)
+				}
+				AddressSet[i] = randomString
+			}
+		}
+		mu.Unlock()
+	}
+	txs := make([]*core.Transaction, 0)
+	for i := uint(0); i < size; i++ {
+		sender := AddressSet[rand2.Intn(20000)]
+		recever := AddressSet[rand2.Intn(20000)]
+
+		sid := utils.Addr2Shard(sender)
+		UUID := strconv.Itoa(sid) + "-" + uuid.New().String()
+
+		min_balance := new(big.Int).Div(params.Init_broker_Balance, new(big.Int).SetInt64(10)).Uint64()
+
+		tx := core.NewTransaction(
+			sender,
+			recever,
+			new(big.Int).SetUint64(min_balance+rand2.Uint64()%min_balance),
+			uint64(123),
+			new(big.Int).SetInt64(int64(20+rand2.Intn(20))),
+		)
+		tx.UUID = UUID
+		txs = append(txs, tx)
+	}
+	return txs
+}
+
 func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
 
 	go func() {
 		for {
 			time.Sleep(time.Second)
 
-			txs := getRandomTxs(1000)
+			txs := bcm.generateRandomTxs(100)
 
 			itx := bcm.dealTxByBroker(txs)
 			//bcm.BrokerModuleLock.Unlock()
@@ -431,13 +482,7 @@ func (bcm *BrokerhubCommitteeMod) HandleBlockInfo(b *message.BlockInfoMsg) {
 func (bcm *BrokerhubCommitteeMod) handleBrokerInBrokerHub() (temp_map map[string]map[uint64]*big.Int) {
 	temp_map = make(map[string]map[uint64]*big.Int)
 	for key, val := range bcm.Broker.BrokerBalance {
-		IsInHub := false
-		for broker_id := range bcm.BrokerJoinBrokerHubState {
-			if broker_id == key {
-				IsInHub = true
-			}
-		}
-		if !IsInHub {
+		if _, exist := bcm.BrokerJoinBrokerHubState[key]; !exist {
 			temp_map[key] = val
 		}
 	}
@@ -446,6 +491,9 @@ func (bcm *BrokerhubCommitteeMod) handleBrokerInBrokerHub() (temp_map map[string
 
 func (bcm *BrokerhubCommitteeMod) init_broker_revenue_in_epoch() {
 	for _, broker_id := range bcm.Broker.BrokerAddress {
+		if slices.Contains(bcm.BrokerHubAccountList, broker_id) {
+			continue
+		}
 		if _, is_in_hub := bcm.BrokerJoinBrokerHubState[broker_id]; !is_in_hub {
 			bcm.brokerEpochProfitInB2E[broker_id] = big.NewFloat(0)
 		}
@@ -472,12 +520,10 @@ func (bcm *BrokerhubCommitteeMod) broker_behaviour_simulator() {
 			continue
 		}
 		b2e_revenue := big.NewFloat(0).Set(bcm.brokerEpochProfitInB2E[broker_id])
-		// b2e_revenue = b2e_revenue.Quo(b2e_revenue, big.NewFloat(0).SetInt(bcm.calculateTotalBalance(broker_id)))
 		max_brokerhub_id := bcm.BrokerHubAccountList[0]
 		max_hub_revenue := big.NewFloat(0)
 		for _, brokerhub_id := range bcm.BrokerHubAccountList {
 			hub_revenue := big.NewFloat(0).Set(bcm.brokerhubEpochProfit[brokerhub_id])
-			// hub_revenue = hub_revenue.Quo(hub_revenue, big.NewFloat(0).SetInt(bcm.getBrokerHubTotalBalance(brokerhub_id)))
 			EARN_ratio := big.NewFloat(1).Sub(big.NewFloat(1), big.NewFloat(0).SetFloat64(bcm.getManagementExpanseRatio()))
 			hub_revenue = hub_revenue.Mul(hub_revenue, EARN_ratio)
 			bcm.sl.Slog.Printf("hub %s revenue: %f", brokerhub_id[:5], hub_revenue)
