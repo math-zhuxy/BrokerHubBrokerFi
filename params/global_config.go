@@ -6,7 +6,7 @@ var (
 	InjectSpeed         = 5000   // the transaction inject speed
 	TotalDataSize       = 500000 // the total number of txs
 	BatchSize           = 5000   // supervisor read a batch of txs then send them, it should be larger than inject speed
-	BrokerNum           = 3
+	BrokerNum           = 20
 	NodesInShard        = 4
 	ShardNum            = 4
 	IterNum_B2E         = 5
