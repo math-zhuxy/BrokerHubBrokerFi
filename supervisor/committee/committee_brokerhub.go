@@ -244,7 +244,6 @@ func (bcm *BrokerhubCommitteeMod) init_brokerhub() {
 			epoch:          0,
 		}
 	}
-	bcm.writeDataToCsv(true)
 }
 
 func (bcm *BrokerhubCommitteeMod) judgeBrokerhubInfo(broker_id string, brokerhub_id string) (string, bool) {
