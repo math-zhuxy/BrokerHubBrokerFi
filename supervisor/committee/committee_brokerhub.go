@@ -269,12 +269,6 @@ func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhub(broker_id string, brokerhub
 		return "already in"
 	}
 
-	// 计算账户余额
-	// broker_balance := bcm.calculateTotalBalance(broker_id)
-	// bcm.Broker.BrokerBalance[brokerhub_id][0].Add(
-	// 	bcm.Broker.BrokerBalance[brokerhub_id][0],
-	// 	broker_balance,
-	// )
 	for i := uint64(0); i < uint64(params.ShardNum); i++ {
 		bcm.Broker.BrokerBalance[brokerhub_id][i].Add(
 			bcm.Broker.BrokerBalance[brokerhub_id][i],
@@ -312,6 +306,9 @@ func (bcm *BrokerhubCommitteeMod) ExitingBrokerHub(broker_id string, brokerhub_i
 	for _, brokerinfo := range bcm.brokerInfoListInBrokerHub[brokerhub_id] {
 		if brokerinfo.BrokerAddr == broker_id {
 			remained_balance := new(big.Int).Set(brokerinfo.BrokerBalance)
+			if bcm.calculateTotalBalance(brokerhub_id).Cmp(remained_balance) == -1 {
+				return "not yet"
+			}
 			for i := uint64(0); i < uint64(params.ShardNum); i++ {
 				if bcm.Broker.BrokerBalance[brokerhub_id][i].Cmp(remained_balance) == 1 {
 					bcm.Broker.BrokerBalance[brokerhub_id][i].Sub(
@@ -325,7 +322,7 @@ func (bcm *BrokerhubCommitteeMod) ExitingBrokerHub(broker_id string, brokerhub_i
 					bcm.Broker.BrokerBalance[brokerhub_id][i] = new(big.Int).SetInt64(0)
 				}
 			}
-			if remained_balance.Cmp(new(big.Int).SetInt64(0)) == -1 {
+			if remained_balance.Cmp(new(big.Int).SetInt64(0)) == 1 {
 				log.Panic()
 			}
 			break
@@ -414,10 +411,10 @@ func (bcm *BrokerhubCommitteeMod) allocateBrokerhubRevenue(addr string, ssid uin
 		return
 	}
 	BrokersRevenue := new(big.Float).Set(fee)
-	BrokerTotalBalanceInHub := bcm.getBrokerHubTotalBalance(addr)
+	BrokersRevenue.Mul(BrokersRevenue, new(big.Float).SetFloat64(1-bcm.taxOptimizer[addr].tax_rate))
 	for _, brokerinfo := range bcm.brokerInfoListInBrokerHub[addr] {
-		broker_revenue := big.NewFloat(0).Mul(BrokersRevenue, new(big.Float).SetInt(brokerinfo.BrokerBalance))
-		broker_revenue.Quo(broker_revenue, big.NewFloat(0).SetInt(BrokerTotalBalanceInHub))
+		broker_revenue := new(big.Float).Mul(BrokersRevenue, new(big.Float).SetInt(brokerinfo.BrokerBalance))
+		broker_revenue.Quo(broker_revenue, new(big.Float).SetInt(bcm.getBrokerHubTotalBalance(addr)))
 		brokerinfo.BrokerProfit.Add(brokerinfo.BrokerProfit, broker_revenue)
 	}
 }
@@ -491,7 +488,10 @@ func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
 
 			time.Sleep(time.Second)
 
-			bcm.broker_behaviour_simulator()
+			// bcm.broker_behaviour_simulator()
+			bcm.writeDataToCsv(false)
+
+			bcm.init_broker_revenue_in_epoch()
 
 		}
 	}()
@@ -588,7 +588,7 @@ func (bcm *BrokerhubCommitteeMod) writeDataToCsv(is_first bool) {
 	}
 }
 
-func (bcm *BrokerhubCommitteeMod) handleBrokerInBrokerHub() (temp_map map[string]map[uint64]*big.Int) {
+func (bcm *BrokerhubCommitteeMod) handleBrokerB2EBalance() (temp_map map[string]map[uint64]*big.Int) {
 	temp_map = make(map[string]map[uint64]*big.Int)
 	for key, val := range bcm.Broker.BrokerBalance {
 		if _, exist := bcm.brokerJoinBrokerHubState[key]; !exist {
@@ -752,7 +752,7 @@ func (bcm *BrokerhubCommitteeMod) dealTxByBroker(txs []*core.Transaction) (itxs 
 		brokerRawMegs = brokerRawMegs[:1000]
 	}
 	now := time.Now()
-	alloctedBrokerRawMegs, restBrokerRawMeg := Broker2Earn.B2E(brokerRawMegs, bcm.handleBrokerInBrokerHub())
+	alloctedBrokerRawMegs, restBrokerRawMeg := Broker2Earn.B2E(brokerRawMegs, bcm.handleBrokerB2EBalance())
 	println("b2e consume time(millsec.) ", time.Since(now).Milliseconds())
 	bcm.restBrokerRawMegPool = append(bcm.restBrokerRawMegPool, restBrokerRawMeg...)
 
@@ -810,7 +810,7 @@ func (bcm *BrokerhubCommitteeMod) dealTxByBroker2(txs []*core.Transaction) (itxs
 	}
 
 	now := time.Now()
-	alloctedBrokerRawMegs, restBrokerRawMeg := Broker2Earn.B2E(brokerRawMegs, bcm.handleBrokerInBrokerHub())
+	alloctedBrokerRawMegs, restBrokerRawMeg := Broker2Earn.B2E(brokerRawMegs, bcm.handleBrokerB2EBalance())
 	println("b2e consume time(millsec.) ", time.Since(now).Milliseconds())
 	bcm.restBrokerRawMegPool2 = append(bcm.restBrokerRawMegPool2, restBrokerRawMeg...)
 
