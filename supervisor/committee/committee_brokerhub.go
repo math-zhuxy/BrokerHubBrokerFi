@@ -397,7 +397,6 @@ func (bcm *BrokerhubCommitteeMod) allocateBrokerhubRevenue(addr string, ssid uin
 			bcm.brokerEpochProfitInB2E[addr] = big.NewFloat(0)
 		}
 		bcm.brokerEpochProfitInB2E[addr].Add(bcm.brokerEpochProfitInB2E[addr], fee)
-
 		return
 	}
 
@@ -466,7 +465,7 @@ func (bcm *BrokerhubCommitteeMod) generateRandomTxs() []*core.Transaction {
 			recever,
 			new(big.Int).SetUint64(min_balance+rand2.Uint64()%min_balance),
 			uint64(123),
-			new(big.Int).SetInt64(int64(100+rand2.Intn(200))),
+			new(big.Int).SetInt64(int64(100+rand2.Intn(100))),
 		)
 		tx.UUID = UUID
 		txs = append(txs, tx)
@@ -489,9 +488,6 @@ func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
 			time.Sleep(time.Second)
 
 			// bcm.broker_behaviour_simulator()
-			bcm.writeDataToCsv(false)
-
-			bcm.init_broker_revenue_in_epoch()
 
 		}
 	}()

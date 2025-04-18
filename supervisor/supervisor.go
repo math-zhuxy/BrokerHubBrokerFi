@@ -1524,9 +1524,9 @@ func (d *Supervisor) RunHTTP() error {
 			return
 		}
 		fmt.Println("addr:", addr)
-		d.ComMod.(*committee.BrokerCommitteeMod_b2e).BrokerBalanceLock.Lock()
-		isBroker := d.ComMod.(*committee.BrokerCommitteeMod_b2e).Broker.IsBroker(addr)
-		d.ComMod.(*committee.BrokerCommitteeMod_b2e).BrokerBalanceLock.Unlock()
+		d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Lock()
+		isBroker := d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.IsBroker(addr)
+		d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Unlock()
 		if isBroker {
 			c.JSON(http.StatusOK, gin.H{"is_broker": "true"})
 		} else {
