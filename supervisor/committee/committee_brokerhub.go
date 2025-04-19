@@ -35,7 +35,13 @@ type optimizer struct {
 	min_tax_rate   float64
 	tax_rate       float64
 	last_exit_time int
-	epoch          int
+}
+
+type simulation_param struct {
+	hubHigherRate int64
+	endedEpoch    int
+	txsPerEpoch   int
+	currentEpoch  int
 }
 
 // CLPA committee operations
@@ -63,6 +69,12 @@ type BrokerhubCommitteeMod struct {
 	Ss          *signal.StopSignal // to control the stop message sending
 	IpNodeTable map[uint64]map[uint64]string
 
+	// transaction revenue list
+	transaction_fee_list []*big.Int
+
+	// transaction value list
+	transaction_value_list []*big.Int
+
 	// log balance
 	Result_lockBalance   map[string][]string
 	Result_brokerBalance map[string][]string
@@ -85,9 +97,9 @@ type BrokerhubCommitteeMod struct {
 	// BrokerHub 这一轮的收益
 	brokerhubEpochProfit map[string]*big.Float
 
-	isInitedBrokerHub bool
-
 	taxOptimizer map[string]*optimizer
+
+	hubParams simulation_param
 }
 
 func NewBrokerhubCommitteeMod(Ip_nodeTable map[uint64]map[uint64]string, Ss *signal.StopSignal, sl *supervisor_log.SupervisorLog, csvFilePath string, dataNum, batchNum int) *BrokerhubCommitteeMod {
@@ -136,33 +148,57 @@ func NewBrokerhubCommitteeMod(Ip_nodeTable map[uint64]map[uint64]string, Ss *sig
 		broker_info_list_in_hub[val] = make([]*message.BrokerInfoInBrokerhub, 0)
 	}
 
-	return &BrokerhubCommitteeMod{
-		csvPath:               csvFilePath,
-		dataTotalNum:          dataNum,
-		batchDataNum:          batchNum,
-		nowDataNum:            0,
-		dataTxNums:            0,
-		brokerConfirm1Pool:    make(map[string]*message.Mag1Confirm),
-		brokerConfirm2Pool:    make(map[string]*message.Mag2Confirm),
-		restBrokerRawMegPool:  make([]*message.BrokerRawMeg, 0),
-		restBrokerRawMegPool2: make([]*message.BrokerRawMeg, 0),
-		brokerTxPool:          make([]*core.Transaction, 0),
-		Broker:                broker,
-		IpNodeTable:           Ip_nodeTable,
-		Ss:                    Ss,
-		sl:                    sl,
-		Result_lockBalance:    result_lockBalance,
-		Result_brokerBalance:  result_brokerBalance,
-		Result_Profit:         result_Profit,
-		LastInvokeTime:        make(map[string]time.Time),
+	var simulation_parameters simulation_param
+	simulation_parameters.hubHigherRate = 10
+	simulation_parameters.txsPerEpoch = 1000
+	simulation_parameters.endedEpoch = 56
+	simulation_parameters.currentEpoch = 0
 
+	fee_list := make([]*big.Int, 0)
+	value_list := make([]*big.Int, 0)
+	hub_higher_ratio := int64(10)
+	for i := 0; i < simulation_parameters.txsPerEpoch; i++ {
+		fee := new(big.Int).SetUint64(uint64(200 + rand2.Intn(100)))
+		broker_num_bios := 4 + len(brokerhub_account_list)*int(hub_higher_ratio) + params.BrokerNum
+		min_balance := int(params.Init_broker_Balance.Int64()) * broker_num_bios * params.ShardNum * 3 / simulation_parameters.txsPerEpoch
+		value := new(big.Int).SetUint64(uint64(min_balance + rand2.Intn(min_balance)))
+		if i%(simulation_parameters.txsPerEpoch/20) == 0 {
+			res := uint64(1001 + rand2.Intn(2000))
+			fee.SetUint64(res)
+			value.SetUint64(res * 2)
+		}
+		fee_list = append(fee_list, fee)
+		value_list = append(value_list, value)
+	}
+
+	return &BrokerhubCommitteeMod{
+		csvPath:                   csvFilePath,
+		dataTotalNum:              dataNum,
+		batchDataNum:              batchNum,
+		nowDataNum:                0,
+		dataTxNums:                0,
+		brokerConfirm1Pool:        make(map[string]*message.Mag1Confirm),
+		brokerConfirm2Pool:        make(map[string]*message.Mag2Confirm),
+		restBrokerRawMegPool:      make([]*message.BrokerRawMeg, 0),
+		restBrokerRawMegPool2:     make([]*message.BrokerRawMeg, 0),
+		brokerTxPool:              make([]*core.Transaction, 0),
+		Broker:                    broker,
+		IpNodeTable:               Ip_nodeTable,
+		Ss:                        Ss,
+		sl:                        sl,
+		Result_lockBalance:        result_lockBalance,
+		Result_brokerBalance:      result_brokerBalance,
+		Result_Profit:             result_Profit,
+		LastInvokeTime:            make(map[string]time.Time),
+		transaction_fee_list:      fee_list,
+		transaction_value_list:    value_list,
 		brokerInfoListInBrokerHub: broker_info_list_in_hub,
 		brokerHubAccountList:      brokerhub_account_list,
 		brokerJoinBrokerHubState:  make(map[string]string),
 		brokerEpochProfitInB2E:    make(map[string]*big.Float),
 		brokerhubEpochProfit:      make(map[string]*big.Float),
-		isInitedBrokerHub:         false,
 		taxOptimizer:              make(map[string]*optimizer),
+		hubParams:                 simulation_parameters,
 	}
 
 }
@@ -215,7 +251,7 @@ func (bcm *BrokerhubCommitteeMod) calculateTotalBalance(addr string) *big.Int {
 }
 
 func (bcm *BrokerhubCommitteeMod) init_brokerhub() {
-	BrokerHubInitialBalance := new(big.Int).Mul(params.Init_Balance, new(big.Int).SetInt64(2))
+	BrokerHubInitialBalance := new(big.Int).Mul(params.Init_broker_Balance, new(big.Int).SetInt64(bcm.hubParams.hubHigherRate))
 	for _, brokerhub_id := range bcm.brokerHubAccountList {
 		bcm.Broker.BrokerAddress = append(bcm.Broker.BrokerAddress, brokerhub_id)
 
@@ -241,7 +277,6 @@ func (bcm *BrokerhubCommitteeMod) init_brokerhub() {
 			min_tax_rate:   0.1,
 			tax_rate:       0.2,
 			last_exit_time: 0,
-			epoch:          0,
 		}
 	}
 }
@@ -306,7 +341,7 @@ func (bcm *BrokerhubCommitteeMod) ExitingBrokerHub(broker_id string, brokerhub_i
 		if brokerinfo.BrokerAddr == broker_id {
 			remained_balance := new(big.Int).Set(brokerinfo.BrokerBalance)
 			if bcm.calculateTotalBalance(brokerhub_id).Cmp(remained_balance) == -1 {
-				return "not yet"
+				return "fund lock"
 			}
 			for i := uint64(0); i < uint64(params.ShardNum); i++ {
 				if bcm.Broker.BrokerBalance[brokerhub_id][i].Cmp(remained_balance) == 1 {
@@ -340,7 +375,6 @@ func (bcm *BrokerhubCommitteeMod) ExitingBrokerHub(broker_id string, brokerhub_i
 
 func (bcm *BrokerhubCommitteeMod) calManagementExpanseRatio() {
 	for _, brokerhub_id := range bcm.brokerHubAccountList {
-		bcm.taxOptimizer[brokerhub_id].epoch++
 		result := bcm.taxOptimizer[brokerhub_id].tax_rate
 		learning_ratio := bcm.taxOptimizer[brokerhub_id].learning_ratio
 		my_hub_length := len(bcm.brokerInfoListInBrokerHub[brokerhub_id])
@@ -354,7 +388,7 @@ func (bcm *BrokerhubCommitteeMod) calManagementExpanseRatio() {
 		if bcm.taxOptimizer[brokerhub_id].last_exit_time > 5 {
 			learning_ratio = max(learning_ratio-0.0005, 0)
 		}
-		if bcm.taxOptimizer[brokerhub_id].epoch > 106 {
+		if bcm.hubParams.currentEpoch > bcm.hubParams.endedEpoch {
 			learning_ratio = max(learning_ratio-0.001, 0)
 		}
 		if my_hub_length > comp_hub_length {
@@ -378,16 +412,9 @@ func (bcm *BrokerhubCommitteeMod) calManagementExpanseRatio() {
 		bcm.taxOptimizer[brokerhub_id].tax_rate = result
 	}
 }
-func (bcm *BrokerhubCommitteeMod) getBrokerHubTotalBalance(brokerhub_id string) *big.Int {
-	BrokerTotalBalanceInHub := big.NewInt(0)
-	for _, brokerinfo := range bcm.brokerInfoListInBrokerHub[brokerhub_id] {
-		BrokerTotalBalanceInHub.Add(BrokerTotalBalanceInHub, brokerinfo.BrokerBalance)
-	}
-	BrokerTotalBalanceInHub.Add(BrokerTotalBalanceInHub, bcm.calculateTotalBalance(brokerhub_id))
-	return BrokerTotalBalanceInHub
-}
 
 func (bcm *BrokerhubCommitteeMod) allocateBrokerhubRevenue(addr string, ssid uint64, fee *big.Float) {
+
 	// 如果账户不是BrokerHub，直接按照正常流程的增加余额流程
 	if !slices.Contains(bcm.brokerHubAccountList, addr) {
 		bcm.Broker.ProfitBalance[addr][ssid].Add(bcm.Broker.ProfitBalance[addr][ssid], fee)
@@ -412,7 +439,7 @@ func (bcm *BrokerhubCommitteeMod) allocateBrokerhubRevenue(addr string, ssid uin
 	BrokersRevenue.Mul(BrokersRevenue, new(big.Float).SetFloat64(1-bcm.taxOptimizer[addr].tax_rate))
 	for _, brokerinfo := range bcm.brokerInfoListInBrokerHub[addr] {
 		broker_revenue := new(big.Float).Mul(BrokersRevenue, new(big.Float).SetInt(brokerinfo.BrokerBalance))
-		broker_revenue.Quo(broker_revenue, new(big.Float).SetInt(bcm.getBrokerHubTotalBalance(addr)))
+		broker_revenue.Quo(broker_revenue, new(big.Float).SetInt(bcm.calculateTotalBalance(addr)))
 		brokerinfo.BrokerProfit.Add(brokerinfo.BrokerProfit, broker_revenue)
 	}
 }
@@ -434,7 +461,10 @@ func (bcm *BrokerhubCommitteeMod) GetBrokerInfomationInHub(broker_id string) (ui
 }
 
 func (bcm *BrokerhubCommitteeMod) generateRandomTxs() []*core.Transaction {
-	size := params.BrokerNum * 100
+	if len(bcm.transaction_fee_list) != len(bcm.transaction_value_list) {
+		log.Panic()
+	}
+	size := len(bcm.transaction_fee_list)
 	if len(AddressSet) == 0 {
 		mu.Lock()
 		if len(AddressSet) == 0 {
@@ -457,14 +487,12 @@ func (bcm *BrokerhubCommitteeMod) generateRandomTxs() []*core.Transaction {
 		sid := utils.Addr2Shard(sender)
 		UUID := strconv.Itoa(sid) + "-" + uuid.New().String()
 
-		min_balance := new(big.Int).Div(params.Init_broker_Balance, new(big.Int).SetInt64(20)).Uint64()
-
 		tx := core.NewTransaction(
 			sender,
 			recever,
-			new(big.Int).SetUint64(min_balance+rand2.Uint64()%min_balance),
+			bcm.transaction_value_list[i],
 			uint64(123),
-			new(big.Int).SetInt64(int64(100+rand2.Intn(100))),
+			bcm.transaction_fee_list[i],
 		)
 		tx.UUID = UUID
 		txs = append(txs, tx)
@@ -473,10 +501,13 @@ func (bcm *BrokerhubCommitteeMod) generateRandomTxs() []*core.Transaction {
 }
 
 func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
+	bcm.init_brokerhub()
+	bcm.writeDataToCsv(true)
 
 	go func() {
 		for {
-			time.Sleep(time.Second)
+
+			bcm.hubParams.currentEpoch++
 
 			txs := bcm.generateRandomTxs()
 
@@ -484,9 +515,9 @@ func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
 
 			bcm.txSending(itx)
 
-			time.Sleep(time.Second)
+			time.Sleep(time.Second * 2)
 
-			// bcm.broker_behaviour_simulator()
+			bcm.broker_behaviour_simulator(true)
 
 		}
 	}()
@@ -569,11 +600,11 @@ func (bcm *BrokerhubCommitteeMod) writeDataToCsv(is_first bool) {
 		} else {
 			revenue, _ := bcm.brokerhubEpochProfit[hub_id].Float64()
 			err = writer.Write([]string{
-				strconv.Itoa(bcm.taxOptimizer[hub_id].epoch),
+				strconv.Itoa(bcm.hubParams.currentEpoch),
 				strconv.FormatFloat(revenue, 'f', 6, 64),
 				strconv.Itoa(len(bcm.brokerInfoListInBrokerHub[hub_id])),
 				strconv.FormatFloat(bcm.taxOptimizer[hub_id].tax_rate, 'f', 6, 64),
-				strconv.FormatUint(bcm.getBrokerHubTotalBalance(hub_id).Uint64(), 10),
+				strconv.FormatUint(bcm.calculateTotalBalance(hub_id).Uint64(), 10),
 			})
 		}
 		if err != nil {
@@ -610,20 +641,33 @@ func (bcm *BrokerhubCommitteeMod) init_broker_revenue_in_epoch() {
 	}
 }
 
-func (bcm *BrokerhubCommitteeMod) broker_behaviour_simulator() {
+func (bcm *BrokerhubCommitteeMod) broker_behaviour_simulator(should_simulate bool) {
 	bcm.BrokerBalanceLock.Lock()
 	defer bcm.BrokerBalanceLock.Unlock()
+	if !should_simulate {
+		bcm.writeDataToCsv(false)
+
+		bcm.init_broker_revenue_in_epoch()
+		return
+	}
+	bcm.writeDataToCsv(false)
 	for key, val := range bcm.brokerInfoListInBrokerHub {
 		fmt.Printf("hub % s has %d brokers", key[:5], len(val))
 	}
 	fmt.Println()
 	bcm.calManagementExpanseRatio()
+	broker_decision_map := make(map[string]string)
+	decided_join_hub_length := make(map[string]int)
+	for _, hub_id := range bcm.brokerHubAccountList {
+		decided_join_hub_length[hub_id] = 0
+	}
+	should_print := true
 	for _, broker_id := range bcm.Broker.BrokerAddress {
 		if slices.Contains(bcm.brokerHubAccountList, broker_id) {
 			continue
 		}
 		if bcm.brokerEpochProfitInB2E[broker_id] == nil {
-			bcm.sl.Slog.Printf("broker %s is not in b2e", broker_id)
+			bcm.sl.Slog.Printf("broker %s is not in b2e", broker_id[:5])
 			bcm.brokerEpochProfitInB2E[broker_id] = big.NewFloat(0)
 			continue
 		}
@@ -632,43 +676,58 @@ func (bcm *BrokerhubCommitteeMod) broker_behaviour_simulator() {
 		max_hub_revenue := big.NewFloat(0)
 		for _, brokerhub_id := range bcm.brokerHubAccountList {
 			hub_revenue := big.NewFloat(0).Set(bcm.brokerhubEpochProfit[brokerhub_id])
-			EARN_ratio := big.NewFloat(1).Sub(big.NewFloat(1), big.NewFloat(0).SetFloat64(bcm.taxOptimizer[brokerhub_id].tax_rate))
-			fmt.Printf("earn ratio is: %f, ", EARN_ratio)
-			hub_revenue.Mul(hub_revenue, EARN_ratio)
-			length := len(bcm.brokerInfoListInBrokerHub[brokerhub_id])
-			if length > 0 {
-				hub_revenue.Quo(hub_revenue, big.NewFloat(float64(length)))
+			earn_ratio := (1 - bcm.taxOptimizer[brokerhub_id].tax_rate)
+			if bcm.hubParams.currentEpoch < bcm.hubParams.endedEpoch {
+				length := (len(bcm.brokerInfoListInBrokerHub[brokerhub_id]) + decided_join_hub_length[brokerhub_id]) / 3
+				if length > 0 {
+					earn_ratio = earn_ratio / float64(length)
+				}
+				hub_revenue.Mul(hub_revenue, new(big.Float).SetFloat64(earn_ratio))
 			}
-			fmt.Printf("hub %s earn: %f, ", brokerhub_id[:4], hub_revenue)
+			if should_print {
+				bcm.sl.Slog.Printf("hub %s revenue is: %f, earn ratio is: %f", brokerhub_id[:5], hub_revenue, earn_ratio)
+			}
 			if hub_revenue.Cmp(max_hub_revenue) == 1 {
 				max_brokerhub_id = brokerhub_id
 				max_hub_revenue = hub_revenue
 			}
 		}
+		if b2e_revenue.Cmp(max_hub_revenue) == 1 {
+			broker_decision_map[broker_id] = "b2e"
+		} else {
+			broker_decision_map[broker_id] = max_brokerhub_id
+			decided_join_hub_length[max_brokerhub_id]++
+		}
+		should_print = false
+	}
+	for broker_id, decision_hub_id := range broker_decision_map {
 		broker_joined_hub_id, broker_is_in_hub := bcm.brokerJoinBrokerHubState[broker_id]
-		fmt.Printf("b2e: %f\n", b2e_revenue)
-		if b2e_revenue.Cmp(max_hub_revenue) == 1 && broker_is_in_hub {
-			if bcm.ExitingBrokerHub(broker_id, broker_joined_hub_id) != "done" {
+		if decision_hub_id == "b2e" && broker_is_in_hub {
+			res := bcm.ExitingBrokerHub(broker_id, broker_joined_hub_id)
+			if res != "done" && res != "fund lock" {
 				log.Panic()
 			}
-			bcm.sl.Slog.Printf("broker %s exit brokerhub %s", broker_id[:5], max_brokerhub_id[:5])
-		} else if max_hub_revenue.Cmp(b2e_revenue) == 1 && !broker_is_in_hub {
-			if bcm.JoiningToBrokerhub(broker_id, max_brokerhub_id) != "done" {
+			if res == "done" {
+				bcm.sl.Slog.Printf("broker %s exit brokerhub %s", broker_id[:5], broker_joined_hub_id[:5])
+			}
+		} else if decision_hub_id != "b2e" && !broker_is_in_hub {
+			if bcm.JoiningToBrokerhub(broker_id, decision_hub_id) != "done" {
 				log.Panic()
 			}
-			bcm.sl.Slog.Printf("broker %s join brokerhub %s", broker_id[:5], max_brokerhub_id[:5])
-		} else if max_hub_revenue.Cmp(b2e_revenue) == 1 && broker_is_in_hub && broker_joined_hub_id != max_brokerhub_id {
-			if bcm.ExitingBrokerHub(broker_id, broker_joined_hub_id) != "done" {
+			bcm.sl.Slog.Printf("broker %s join brokerhub %s", broker_id[:5], decision_hub_id[:5])
+		} else if decision_hub_id != "b2e" && broker_is_in_hub && broker_joined_hub_id != decision_hub_id {
+			res := bcm.ExitingBrokerHub(broker_id, broker_joined_hub_id)
+			if res != "done" && res != "fund lock" {
 				log.Panic()
 			}
-			if bcm.JoiningToBrokerhub(broker_id, max_brokerhub_id) != "done" {
-				log.Panic()
+			if res == "done" {
+				if bcm.JoiningToBrokerhub(broker_id, decision_hub_id) != "done" {
+					log.Panic()
+				}
+				bcm.sl.Slog.Printf("broker %s jump to brokerhub %s", broker_id[:5], broker_joined_hub_id[:5])
 			}
-			bcm.sl.Slog.Printf("broker %s jump to brokerhub %s", broker_id[:5], max_brokerhub_id[:5])
 		}
 	}
-
-	bcm.writeDataToCsv(false)
 
 	bcm.init_broker_revenue_in_epoch()
 }
@@ -699,10 +758,6 @@ func (bcm *BrokerhubCommitteeMod) createConfirm(txs []*core.Transaction) {
 func (bcm *BrokerhubCommitteeMod) dealTxByBroker(txs []*core.Transaction) (itxs []*core.Transaction) {
 	bcm.BrokerBalanceLock.Lock()
 	fmt.Println("dealTxByBroker:", len(txs))
-	if !bcm.isInitedBrokerHub {
-		bcm.init_brokerhub()
-		bcm.isInitedBrokerHub = true
-	}
 	itxs = make([]*core.Transaction, 0)
 	brokerRawMegs := make([]*message.BrokerRawMeg, 0)
 	brokerRawMegs = append(brokerRawMegs, bcm.restBrokerRawMegPool...)

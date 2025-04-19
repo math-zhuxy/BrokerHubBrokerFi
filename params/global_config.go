@@ -8,7 +8,7 @@ var (
 	BatchSize           = 5000   // supervisor read a batch of txs then send them, it should be larger than inject speed
 	BrokerNum           = 20
 	NodesInShard        = 4
-	ShardNum            = 4
+	ShardNum            = 3
 	IterNum_B2E         = 5
 	Brokerage           = 0.1
 	DataWrite_path      = "./result/" // measurement data result output path

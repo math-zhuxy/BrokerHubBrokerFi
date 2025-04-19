@@ -37,14 +37,14 @@ func (rbhm *RawBrokerPbftExtraHandleMod_forB2E) HandleinPrePrepare(ppmsg *messag
 	rbhm.pbftNode.requestPool[string(ppmsg.Digest)] = ppmsg.RequestMsg
 	return true
 
-	if rbhm.pbftNode.CurChain.IsValidBlock(core.DecodeB(ppmsg.RequestMsg.Msg.Content)) != nil {
-		rbhm.pbftNode.pl.Plog.Printf("S%dN%d : not a valid block\n", rbhm.pbftNode.ShardID, rbhm.pbftNode.NodeID)
-		return false
-	}
-	rbhm.pbftNode.pl.Plog.Printf("S%dN%d : the pre-prepare message is correct, putting it into the RequestPool. \n", rbhm.pbftNode.ShardID, rbhm.pbftNode.NodeID)
-	rbhm.pbftNode.requestPool[string(ppmsg.Digest)] = ppmsg.RequestMsg
-	// merge to be a prepare message
-	return true
+	// if rbhm.pbftNode.CurChain.IsValidBlock(core.DecodeB(ppmsg.RequestMsg.Msg.Content)) != nil {
+	// 	rbhm.pbftNode.pl.Plog.Printf("S%dN%d : not a valid block\n", rbhm.pbftNode.ShardID, rbhm.pbftNode.NodeID)
+	// 	return false
+	// }
+	// rbhm.pbftNode.pl.Plog.Printf("S%dN%d : the pre-prepare message is correct, putting it into the RequestPool. \n", rbhm.pbftNode.ShardID, rbhm.pbftNode.NodeID)
+	// rbhm.pbftNode.requestPool[string(ppmsg.Digest)] = ppmsg.RequestMsg
+	// // merge to be a prepare message
+	// return true
 }
 
 // the operation in prepare, and in pbft + tx relaying, this function does not need to do any.
