@@ -34,7 +34,6 @@ type optimizer struct {
 	max_tax_rate   float64
 	min_tax_rate   float64
 	tax_rate       float64
-	last_exit_time int
 }
 
 type simulation_param struct {
@@ -272,11 +271,10 @@ func (bcm *BrokerhubCommitteeMod) init_brokerhub() {
 
 		bcm.taxOptimizer[brokerhub_id] = &optimizer{
 			init_tax_rate:  0.2,
-			learning_ratio: 0.01,
+			learning_ratio: 0.08,
 			max_tax_rate:   0.5,
 			min_tax_rate:   0.1,
 			tax_rate:       0.2,
-			last_exit_time: 0,
 		}
 	}
 }
@@ -375,6 +373,9 @@ func (bcm *BrokerhubCommitteeMod) ExitingBrokerHub(broker_id string, brokerhub_i
 
 func (bcm *BrokerhubCommitteeMod) calManagementExpanseRatio() {
 	for _, brokerhub_id := range bcm.brokerHubAccountList {
+		if bcm.hubParams.currentEpoch > bcm.hubParams.endedEpoch {
+			continue
+		}
 		result := bcm.taxOptimizer[brokerhub_id].tax_rate
 		learning_ratio := bcm.taxOptimizer[brokerhub_id].learning_ratio
 		my_hub_length := len(bcm.brokerInfoListInBrokerHub[brokerhub_id])
@@ -385,21 +386,18 @@ func (bcm *BrokerhubCommitteeMod) calManagementExpanseRatio() {
 				break
 			}
 		}
-		if bcm.taxOptimizer[brokerhub_id].last_exit_time > 5 {
-			learning_ratio = max(learning_ratio-0.0005, 0)
-		}
-		if bcm.hubParams.currentEpoch > bcm.hubParams.endedEpoch {
-			learning_ratio = max(learning_ratio-0.001, 0)
-		}
 		if my_hub_length > comp_hub_length {
-			result += learning_ratio
 			if comp_hub_length == 0 {
-				result += learning_ratio
+				result += learning_ratio * 2
+			} else {
+				result += learning_ratio * (1 + float64(my_hub_length)/float64(comp_hub_length*10))
 			}
 		} else {
 			result -= learning_ratio
 			if my_hub_length == 0 {
-				result -= learning_ratio
+				result -= learning_ratio * 2
+			} else {
+				result -= learning_ratio * (1 + float64(comp_hub_length)/float64(my_hub_length*10))
 			}
 		}
 		if result > bcm.taxOptimizer[brokerhub_id].max_tax_rate {
@@ -408,7 +406,6 @@ func (bcm *BrokerhubCommitteeMod) calManagementExpanseRatio() {
 		if result < bcm.taxOptimizer[brokerhub_id].min_tax_rate {
 			result = bcm.taxOptimizer[brokerhub_id].min_tax_rate
 		}
-		bcm.taxOptimizer[brokerhub_id].learning_ratio = learning_ratio
 		bcm.taxOptimizer[brokerhub_id].tax_rate = result
 	}
 }
@@ -646,13 +643,12 @@ func (bcm *BrokerhubCommitteeMod) broker_behaviour_simulator(should_simulate boo
 	defer bcm.BrokerBalanceLock.Unlock()
 	if !should_simulate {
 		bcm.writeDataToCsv(false)
-
 		bcm.init_broker_revenue_in_epoch()
 		return
 	}
 	bcm.writeDataToCsv(false)
 	for key, val := range bcm.brokerInfoListInBrokerHub {
-		fmt.Printf("hub % s has %d brokers", key[:5], len(val))
+		bcm.sl.Slog.Printf("hub %s has % d brokers", key[:5], len(val))
 	}
 	fmt.Println()
 	bcm.calManagementExpanseRatio()
@@ -667,7 +663,6 @@ func (bcm *BrokerhubCommitteeMod) broker_behaviour_simulator(should_simulate boo
 			continue
 		}
 		if bcm.brokerEpochProfitInB2E[broker_id] == nil {
-			bcm.sl.Slog.Printf("broker %s is not in b2e", broker_id[:5])
 			bcm.brokerEpochProfitInB2E[broker_id] = big.NewFloat(0)
 			continue
 		}
@@ -728,7 +723,6 @@ func (bcm *BrokerhubCommitteeMod) broker_behaviour_simulator(should_simulate boo
 			}
 		}
 	}
-
 	bcm.init_broker_revenue_in_epoch()
 }
 
