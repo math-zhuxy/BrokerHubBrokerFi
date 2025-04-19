@@ -150,7 +150,7 @@ func NewBrokerhubCommitteeMod(Ip_nodeTable map[uint64]map[uint64]string, Ss *sig
 	var simulation_parameters simulation_param
 	simulation_parameters.hubHigherRate = 10
 	simulation_parameters.txsPerEpoch = 1000
-	simulation_parameters.endedEpoch = 56
+	simulation_parameters.endedEpoch = 83
 	simulation_parameters.currentEpoch = 0
 
 	fee_list := make([]*big.Int, 0)
@@ -273,7 +273,7 @@ func (bcm *BrokerhubCommitteeMod) init_brokerhub() {
 			init_tax_rate:  0.2,
 			learning_ratio: 0.08,
 			max_tax_rate:   0.5,
-			min_tax_rate:   0.1,
+			min_tax_rate:   0.05,
 			tax_rate:       0.2,
 		}
 	}
@@ -390,14 +390,14 @@ func (bcm *BrokerhubCommitteeMod) calManagementExpanseRatio() {
 			if comp_hub_length == 0 {
 				result += learning_ratio * 2
 			} else {
-				result += learning_ratio * (1 + float64(my_hub_length)/float64(comp_hub_length*10))
+				result += learning_ratio * (0.99 + rand2.Float64()*0.2)
 			}
 		} else {
 			result -= learning_ratio
 			if my_hub_length == 0 {
-				result -= learning_ratio * 2
+				result -= learning_ratio * 1.5
 			} else {
-				result -= learning_ratio * (1 + float64(comp_hub_length)/float64(my_hub_length*10))
+				result -= learning_ratio * (0.99 + rand2.Float64()*0.2)
 			}
 		}
 		if result > bcm.taxOptimizer[brokerhub_id].max_tax_rate {
@@ -505,6 +505,7 @@ func (bcm *BrokerhubCommitteeMod) MsgSendingControl() {
 		for {
 
 			bcm.hubParams.currentEpoch++
+			bcm.sl.Slog.Printf("epoch: %d", bcm.hubParams.currentEpoch)
 
 			txs := bcm.generateRandomTxs()
 
@@ -650,7 +651,6 @@ func (bcm *BrokerhubCommitteeMod) broker_behaviour_simulator(should_simulate boo
 	for key, val := range bcm.brokerInfoListInBrokerHub {
 		bcm.sl.Slog.Printf("hub %s has % d brokers", key[:5], len(val))
 	}
-	fmt.Println()
 	bcm.calManagementExpanseRatio()
 	broker_decision_map := make(map[string]string)
 	decided_join_hub_length := make(map[string]int)
