@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"math/big"
 	rand2 "math/rand"
 	"os"
@@ -585,6 +586,26 @@ func (bcm *BrokerhubCommitteeMod) HandleBlockInfo(b *message.BlockInfoMsg) {
 	bcm.createConfirm(txs)
 }
 
+func (bcm *BrokerhubCommitteeMod) calculateBrokerhubRank(brokerhub_id string, mer float64) int {
+	broker_num := len(bcm.brokerInfoListInBrokerHub[brokerhub_id])
+	if broker_num == 20 {
+		return 1
+	}
+	if broker_num == 0 && math.Abs(mer-bcm.taxOptimizer[brokerhub_id].min_tax_rate) < 0.01 {
+		return 2
+	}
+	if broker_num > 10 {
+		return 1
+	}
+	if broker_num <= 10 && broker_num > 6 {
+		return 8 - broker_num/2
+	}
+	if broker_num <= 6 {
+		return 13 - broker_num
+	}
+	return 2
+}
+
 func (bcm *BrokerhubCommitteeMod) writeDataToCsv(is_first bool) {
 	for index, hub_id := range bcm.brokerHubAccountList {
 		file, err := os.OpenFile("./hubres/hub"+strconv.Itoa(index)+".csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -594,7 +615,7 @@ func (bcm *BrokerhubCommitteeMod) writeDataToCsv(is_first bool) {
 		defer file.Close()
 		writer := csv.NewWriter(file)
 		if is_first {
-			err = writer.Write([]string{"epoch", "revenue", "broker_num", "mer", "fund"})
+			err = writer.Write([]string{"epoch", "revenue", "broker_num", "mer", "fund", "Rank"})
 		} else {
 			revenue, _ := bcm.brokerhubEpochProfit[hub_id].Float64()
 			err = writer.Write([]string{
@@ -603,6 +624,7 @@ func (bcm *BrokerhubCommitteeMod) writeDataToCsv(is_first bool) {
 				strconv.Itoa(len(bcm.brokerInfoListInBrokerHub[hub_id])),
 				strconv.FormatFloat(bcm.taxOptimizer[hub_id].tax_rate, 'f', 6, 64),
 				strconv.FormatUint(bcm.calculateTotalBalance(hub_id).Uint64(), 10),
+				strconv.Itoa(bcm.calculateBrokerhubRank(hub_id, bcm.taxOptimizer[hub_id].tax_rate)),
 			})
 		}
 		if err != nil {
