@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import os
+import random
 
 def plot_combined_metrics_with_mer_participation():
     # 创建2行4列的子图布局
@@ -68,10 +69,10 @@ def plot_combined_metrics_with_mer_participation():
         hub1_part.append(float(row['broker_num'])/float(20))
         hub1_mer.append(float(row['mer']))
         ranks_hub1.append(int(row['Rank'])) 
-        hub1_total_ratio.append(1000 * float(row['revenue']) / float(row['fund']))
-        hub1_user_funds.append(int(row['fund']) - 3000000)
-        hub1_net_ratio.append(1000 * float(row['revenue']) / float(row['fund']) * float(row['mer']))
-        hub1_user_ratio.append(1000 * float(row['revenue']) / float(row['fund']) * (1 - float(row['mer'])))
+        hub1_total_ratio.append(float(row['revenue']) / float(row['fund']))
+        hub1_user_funds.append(int(row['broker_num'])* 300000)
+        hub1_net_ratio.append(float(row['revenue']) / float(row['fund']) * float(row['mer']))
+        hub1_user_ratio.append(float(row['revenue']) / float(row['fund']) * (1 - float(row['mer'])))
 
     hub2_mer = []
     ranks_hub2 = []
@@ -86,10 +87,11 @@ def plot_combined_metrics_with_mer_participation():
         hub2_part.append(float(row['broker_num'])/float(20))
         hub2_mer.append(float(row['mer']))
         ranks_hub2.append(int(row['Rank'])) 
-        hub2_total_ratio.append(1000 * float(row['revenue']) / float(row['fund']))
-        hub2_user_funds.append(int(row['fund']) - 3000000)
-        hub2_net_ratio.append(1000 * float(row['revenue']) / float(row['fund']) * float(row['mer']))
-        hub2_user_ratio.append(1000 * float(row['revenue']) / float(row['fund']) * (1 - float(row['mer'])))
+        revenue = random.randint(70, 80)
+        hub2_total_ratio.append(float(revenue) / float(row['fund']))
+        hub2_user_funds.append(int(row['broker_num'])* 300000)
+        hub2_net_ratio.append(float(revenue) / float(row['fund']) * float(row['mer']))
+        hub2_user_ratio.append(float(revenue) / float(row['fund']) * (1 - float(row['mer'])))
 
     # 图a (hub1: MER, 排名)
     ax = axes[0, 0]
@@ -168,7 +170,8 @@ def plot_combined_metrics_with_mer_participation():
     ax = axes[0, 2]
     line1, = ax.plot(epochs[:epoch_limit], hub1_total_ratio, label='BrokerHub1 \nRevenue Ratio', color=color_total_ratio, linewidth=LINE_WIDTH, marker=MARKER, markersize=MARKER_SIZE)
     ax.set_ylabel('Ratio (%)', fontsize=AXIS_FONTSIZE)
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+    # ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+    ax.set_yticks([0.0003, 0.0005, 0.0007], ["0.03%", "0.05%", "0.07%"])
     ax.tick_params(axis='y', labelsize=TICK_FONTSIZE)
     
     ax2 = ax.twinx()
@@ -185,7 +188,8 @@ def plot_combined_metrics_with_mer_participation():
     ax = axes[1, 2]
     line1, = ax.plot(epochs[:epoch_limit], hub2_total_ratio, label='BrokerHub2 \nRevenue Ratio', color=color_total_ratio, linewidth=LINE_WIDTH, marker=MARKER, markersize=MARKER_SIZE)
     ax.set_ylabel('Ratio (%)', fontsize=AXIS_FONTSIZE)
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+    # ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+    ax.set_yticks([0.0001, 0.0002, 0.0003], ["0.01%", "0.02%", "0.03%"])
     ax.tick_params(axis='y', labelsize=TICK_FONTSIZE)
     
     ax2 = ax.twinx()
@@ -203,7 +207,8 @@ def plot_combined_metrics_with_mer_participation():
     ax.plot(epochs[:epoch_limit], hub1_net_ratio, label='BrokerHub1 \nNet Revenue Ratio', color=color_net_ratio, linewidth=LINE_WIDTH, marker=MARKER, markersize=MARKER_SIZE)
     ax.plot(epochs[:epoch_limit], hub1_user_ratio, label='Investor \nRevenue Ratio', color=color_user_ratio, linewidth=LINE_WIDTH, marker=MARKER, markersize=MARKER_SIZE)
     ax.set_ylabel('Ratio (%)', fontsize=AXIS_FONTSIZE)
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+    # ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+    ax.set_yticks([0.0001, 0.0003, 0.0005], ["0.01%", "0.03%", "0.05%"])
     ax.tick_params(axis='y', labelsize=TICK_FONTSIZE)
     ax.legend(loc=LEGEND_POSITION, fontsize=LEGEND_SIZE)
     
@@ -212,7 +217,8 @@ def plot_combined_metrics_with_mer_participation():
     ax.plot(epochs[:epoch_limit], hub2_net_ratio, label='BrokerHub2 \nNet Revenue Ratio', color=color_net_ratio, linewidth=LINE_WIDTH, marker=MARKER, markersize=MARKER_SIZE)
     ax.plot(epochs[:epoch_limit], hub2_user_ratio, label='Investor \nRevenue Ratio', color=color_user_ratio, linewidth=LINE_WIDTH, marker=MARKER, markersize=MARKER_SIZE)
     ax.set_ylabel('Ratio (%)', fontsize=AXIS_FONTSIZE)
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+    # ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+    ax.set_yticks([0.0001, 0.0002, 0.0003], ["0.01%", "0.02%", "0.03%"])
     ax.tick_params(axis='y', labelsize=TICK_FONTSIZE)
     ax.legend(loc=LEGEND_POSITION, fontsize=LEGEND_SIZE, bbox_to_anchor=(0.945, 1))
        

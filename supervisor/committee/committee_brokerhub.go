@@ -151,22 +151,27 @@ func NewBrokerhubCommitteeMod(Ip_nodeTable map[uint64]map[uint64]string, Ss *sig
 	var simulation_parameters simulation_param
 	simulation_parameters.hubHigherRate = 10
 	simulation_parameters.txsPerEpoch = 1000
-	simulation_parameters.endedEpoch = 83
+	simulation_parameters.endedEpoch = 86
 	simulation_parameters.currentEpoch = 0
 
 	fee_list := make([]*big.Int, 0)
 	value_list := make([]*big.Int, 0)
-	hub_higher_ratio := int64(10)
+	// hub_higher_ratio := int64(10)
+	// num_of_special_tx := 0
 	for i := 0; i < simulation_parameters.txsPerEpoch; i++ {
-		fee := new(big.Int).SetUint64(uint64(200 + rand2.Intn(100)))
-		broker_num_bios := 4 + len(brokerhub_account_list)*int(hub_higher_ratio) + params.BrokerNum
+		fee := new(big.Int).SetUint64(uint64(200 + rand2.Intn(200)))
+		broker_num_bios := 4 + len(brokerhub_account_list) + params.BrokerNum
 		min_balance := int(params.Init_broker_Balance.Int64()) * broker_num_bios * params.ShardNum * 3 / simulation_parameters.txsPerEpoch
 		value := new(big.Int).SetUint64(uint64(min_balance + rand2.Intn(min_balance)))
-		if i%(simulation_parameters.txsPerEpoch/20) == 0 {
-			res := uint64(1001 + rand2.Intn(2000))
-			fee.SetUint64(res)
-			value.SetUint64(res * 2)
-		}
+		// if i%(simulation_parameters.txsPerEpoch/2) == 0 {
+		// 	fee.SetUint64(7500)
+		// 	value.SetUint64(500)
+		// }
+		// if num_of_special_tx < 3 {
+		// 	fee.SetUint64(7500)
+		// 	value.SetUint64(100)
+		// 	num_of_special_tx++
+		// }
 		fee_list = append(fee_list, fee)
 		value_list = append(value_list, value)
 	}
@@ -251,7 +256,7 @@ func (bcm *BrokerhubCommitteeMod) calculateTotalBalance(addr string) *big.Int {
 }
 
 func (bcm *BrokerhubCommitteeMod) init_brokerhub() {
-	BrokerHubInitialBalance := new(big.Int).Mul(params.Init_broker_Balance, new(big.Int).SetInt64(bcm.hubParams.hubHigherRate))
+	BrokerHubInitialBalance := new(big.Int).Set(params.Init_broker_Balance)
 	for _, brokerhub_id := range bcm.brokerHubAccountList {
 		bcm.Broker.BrokerAddress = append(bcm.Broker.BrokerAddress, brokerhub_id)
 
@@ -412,34 +417,48 @@ func (bcm *BrokerhubCommitteeMod) calManagementExpanseRatio() {
 }
 
 func (bcm *BrokerhubCommitteeMod) allocateBrokerhubRevenue(addr string, ssid uint64, fee *big.Float) {
-
-	// 如果账户不是BrokerHub，直接按照正常流程的增加余额流程
-	if !slices.Contains(bcm.brokerHubAccountList, addr) {
-		bcm.Broker.ProfitBalance[addr][ssid].Add(bcm.Broker.ProfitBalance[addr][ssid], fee)
-		// 本轮 B2E 收益增加
-		if bcm.brokerEpochProfitInB2E[addr] == nil {
-			bcm.brokerEpochProfitInB2E[addr] = big.NewFloat(0)
+	if slices.Contains(bcm.brokerHubAccountList, addr) {
+		brokerhub_bios := make(map[string]int)
+		total_bios := 0
+		for _, hub_id := range bcm.brokerHubAccountList {
+			brokerhub_bios[hub_id] = 1 + len(bcm.brokerInfoListInBrokerHub)
+			total_bios += 1 + len(bcm.brokerInfoListInBrokerHub)
 		}
-		bcm.brokerEpochProfitInB2E[addr].Add(bcm.brokerEpochProfitInB2E[addr], fee)
+		bios := float64(brokerhub_bios[addr]) / float64(total_bios)
+		earn := new(big.Float).Mul(fee, new(big.Float).SetFloat64(bios))
+		bcm.Broker.ProfitBalance[addr][ssid].Add(bcm.Broker.ProfitBalance[addr][ssid], earn)
+		bcm.brokerhubEpochProfit[addr].Add(bcm.brokerhubEpochProfit[addr], earn)
 		return
 	}
-
-	// BrokerHub获取的收益
 	bcm.Broker.ProfitBalance[addr][ssid].Add(bcm.Broker.ProfitBalance[addr][ssid], fee)
-	// brokerhub本轮epoch收益增加
-	bcm.brokerhubEpochProfit[addr].Add(bcm.brokerhubEpochProfit[addr], fee)
 
-	// 计算每个Broker的收益
-	if len(bcm.brokerInfoListInBrokerHub[addr]) == 0 {
-		return
-	}
-	BrokersRevenue := new(big.Float).Set(fee)
-	BrokersRevenue.Mul(BrokersRevenue, new(big.Float).SetFloat64(1-bcm.taxOptimizer[addr].tax_rate))
-	for _, brokerinfo := range bcm.brokerInfoListInBrokerHub[addr] {
-		broker_revenue := new(big.Float).Mul(BrokersRevenue, new(big.Float).SetInt(brokerinfo.BrokerBalance))
-		broker_revenue.Quo(broker_revenue, new(big.Float).SetInt(bcm.calculateTotalBalance(addr)))
-		brokerinfo.BrokerProfit.Add(brokerinfo.BrokerProfit, broker_revenue)
-	}
+	// // 如果账户不是BrokerHub，直接按照正常流程的增加余额流程
+	// if !slices.Contains(bcm.brokerHubAccountList, addr) {
+	// 	bcm.Broker.ProfitBalance[addr][ssid].Add(bcm.Broker.ProfitBalance[addr][ssid], fee)
+	// 	// 本轮 B2E 收益增加
+	// 	if bcm.brokerEpochProfitInB2E[addr] == nil {
+	// 		bcm.brokerEpochProfitInB2E[addr] = big.NewFloat(0)
+	// 	}
+	// 	bcm.brokerEpochProfitInB2E[addr].Add(bcm.brokerEpochProfitInB2E[addr], fee)
+	// 	return
+	// }
+
+	// // BrokerHub获取的收益
+	// bcm.Broker.ProfitBalance[addr][ssid].Add(bcm.Broker.ProfitBalance[addr][ssid], fee)
+	// // brokerhub本轮epoch收益增加
+	// bcm.brokerhubEpochProfit[addr].Add(bcm.brokerhubEpochProfit[addr], fee)
+
+	// // 计算每个Broker的收益
+	// if len(bcm.brokerInfoListInBrokerHub[addr]) == 0 {
+	// 	return
+	// }
+	// BrokersRevenue := new(big.Float).Set(fee)
+	// BrokersRevenue.Mul(BrokersRevenue, new(big.Float).SetFloat64(1-bcm.taxOptimizer[addr].tax_rate))
+	// for _, brokerinfo := range bcm.brokerInfoListInBrokerHub[addr] {
+	// 	broker_revenue := new(big.Float).Mul(BrokersRevenue, new(big.Float).SetInt(brokerinfo.BrokerBalance))
+	// 	broker_revenue.Quo(broker_revenue, new(big.Float).SetInt(bcm.calculateTotalBalance(addr)))
+	// 	brokerinfo.BrokerProfit.Add(brokerinfo.BrokerProfit, broker_revenue)
+	// }
 }
 
 func (bcm *BrokerhubCommitteeMod) GetBrokerInfomationInHub(broker_id string) (uint64, float64, string) {
