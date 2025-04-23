@@ -1395,6 +1395,53 @@ func (d *Supervisor) RunHTTP() error {
 		ctx.JSON(http.StatusOK, gin.H{"msg": res})
 	})
 
+	router.GET("/JoinToBrokerhubDirectly", func(ctx *gin.Context) {
+		broker_id := ctx.Query("broker")
+		hub_id := ctx.Query("hub")
+		token := ctx.Query("token")
+		if broker_id == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Address is required"})
+			return
+		}
+		if hub_id == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Address is required"})
+			return
+		}
+		if token == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Amount is required"})
+			return
+		}
+		tokenInt, success := new(big.Int).SetString(token, 10)
+		if !success {
+			ctx.JSON(http.StatusOK, gin.H{"error": "Amount is invalid!"})
+			return
+		}
+		if tokenInt.Cmp(big.NewInt(0)) <= 0 {
+			ctx.JSON(http.StatusOK, gin.H{"error": "Amount is invalid!"})
+			return
+		}
+		res := d.ComMod.(*committee.BrokerhubCommitteeMod).JoiningToBrokerhubDirectly(broker_id, hub_id, tokenInt)
+		ctx.JSON(http.StatusOK, gin.H{"msg": res})
+	})
+
+	router.GET("/WithdrawBrokerhubDirectly", func(ctx *gin.Context) {
+		broker_id := ctx.Query("broker")
+		hub_id := ctx.Query("hub")
+		if broker_id == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Address is required"})
+			return
+		}
+		if hub_id == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Address is required"})
+			return
+		}
+		res, profit := d.ComMod.(*committee.BrokerhubCommitteeMod).WithdrawBrokerhubDirectly(broker_id, hub_id)
+		ctx.JSON(http.StatusOK, gin.H{
+			"msg":    res,
+			"profit": profit,
+		})
+	})
+
 	// Exit BrokerHub
 	router.POST("/ExitBrokerHub", func(ctx *gin.Context) {
 		var msg service.BrokerInfoInHub
