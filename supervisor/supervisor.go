@@ -1863,6 +1863,66 @@ func (d *Supervisor) RunHTTP() error {
 		c.JSON(http.StatusOK, gin.H{"message": "Successfully withdraw " + new(big.Int).SetUint64(profitUint64).String() + " tokens from B2E"})
 	})
 
+	router.GET("withdrawbroker2", func(c *gin.Context) {
+		d := c.MustGet("supervisor").(*Supervisor)
+		addr := c.Query("addr")
+		if addr == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Address is required"})
+			return
+		}
+		fmt.Println("addr:", addr)
+		for _, hub_id := range d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerHubAccountList {
+			d.ComMod.(*committee.BrokerhubCommitteeMod).ExitingBrokerHub(addr, hub_id)
+		}
+
+		d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Lock()
+		defer d.ComMod.(*committee.BrokerhubCommitteeMod).BrokerBalanceLock.Unlock()
+
+		isBroker := d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.IsBroker(addr)
+		if !isBroker {
+			c.JSON(http.StatusOK, gin.H{"error": "not a broker,cannot invoke withdrawbroker!"})
+			return
+		}
+
+		//计算需要返还的钱
+		var profit *big.Float
+		profit = new(big.Float).SetFloat64(0)
+		for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
+			profit = new(big.Float).Add(new(big.Float).SetInt(d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.BrokerBalance[addr][sid]), profit)
+		}
+		for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
+			profit = new(big.Float).Add(new(big.Float).SetInt(d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.LockBalance[addr][sid]), profit)
+		}
+		for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
+			profit = new(big.Float).Add(d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.ProfitBalance[addr][sid], profit)
+		}
+		profitUint64, _ := profit.Uint64()
+
+		//返还到账户余额
+		tx := core.NewTransaction(addr, addr, new(big.Int).SetUint64(profitUint64), uint64(123), big.NewInt(0))
+		tx.IsAllocatedRecipent = true
+		txs := make([]*core.Transaction, 0)
+		txs = append(txs, tx)
+		it := message.InjectTxs{
+			Txs:       txs,
+			ToShardID: Clt.GetAddr2ShardMap(addr),
+		}
+		itByte, err2 := json.Marshal(it)
+		if err2 != nil {
+			log.Panic(err2)
+		}
+		send_msg := message.MergeMessage(message.CInjectHead, itByte)
+		go networks.TcpDial(send_msg, d.ComMod.(*committee.BrokerhubCommitteeMod).IpNodeTable[Clt.GetAddr2ShardMap(addr)][0])
+
+		//从broker数据结构中删除该地址
+		d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.BrokerAddress = removeElement(d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.BrokerAddress, addr)
+		delete(d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.BrokerBalance, addr)
+		delete(d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.LockBalance, addr)
+		delete(d.ComMod.(*committee.BrokerhubCommitteeMod).Broker.ProfitBalance, addr)
+
+		c.JSON(http.StatusOK, gin.H{"message": "Successfully withdraw " + new(big.Int).SetUint64(profitUint64).String() + " tokens from B2E"})
+	})
+
 	//TODO
 	router.GET("queryTransactionByUserAddr", func(c *gin.Context) {
 		//d := c.MustGet("supervisor").(*Supervisor)
