@@ -1420,7 +1420,7 @@ func (d *Supervisor) RunHTTP() error {
 			ctx.JSON(http.StatusOK, gin.H{"error": "Amount is invalid!"})
 			return
 		}
-		res := d.ComMod.(*committee.BrokerhubCommitteeMod).JoiningToBrokerhubDirectly(broker_id, hub_id, tokenInt)
+		res := d.ComMod.(*committee.BrokerhubCommitteeMod).JoiningToBrokerhubOrstackMore(broker_id, hub_id, tokenInt)
 		ctx.JSON(http.StatusOK, gin.H{"msg": res})
 	})
 

@@ -85,6 +85,9 @@ type BrokerhubCommitteeMod struct {
 	// Broker infomation in BrokerHub
 	brokerInfoListInBrokerHub map[string][]*message.BrokerInfoInBrokerhub
 
+	// Broker history infomation in Brokerhub
+	global_broker_info_list_hub []*message.BrokerInfoInBrokerhub
+
 	// BorkerHub List
 	BrokerHubAccountList []utils.Address
 
@@ -143,6 +146,7 @@ func NewBrokerhubCommitteeMod(Ip_nodeTable map[uint64]map[uint64]string, Ss *sig
 	}
 
 	broker_info_list_in_hub := make(map[string][]*message.BrokerInfoInBrokerhub)
+	global_info_list_hub := make([]*message.BrokerInfoInBrokerhub, 0)
 
 	for _, val := range brokerhub_account_list {
 		broker_info_list_in_hub[val] = make([]*message.BrokerInfoInBrokerhub, 0)
@@ -177,33 +181,34 @@ func NewBrokerhubCommitteeMod(Ip_nodeTable map[uint64]map[uint64]string, Ss *sig
 	}
 
 	return &BrokerhubCommitteeMod{
-		csvPath:                   csvFilePath,
-		dataTotalNum:              dataNum,
-		batchDataNum:              batchNum,
-		nowDataNum:                0,
-		dataTxNums:                0,
-		brokerConfirm1Pool:        make(map[string]*message.Mag1Confirm),
-		brokerConfirm2Pool:        make(map[string]*message.Mag2Confirm),
-		restBrokerRawMegPool:      make([]*message.BrokerRawMeg, 0),
-		restBrokerRawMegPool2:     make([]*message.BrokerRawMeg, 0),
-		brokerTxPool:              make([]*core.Transaction, 0),
-		Broker:                    broker,
-		IpNodeTable:               Ip_nodeTable,
-		Ss:                        Ss,
-		sl:                        sl,
-		Result_lockBalance:        result_lockBalance,
-		Result_brokerBalance:      result_brokerBalance,
-		Result_Profit:             result_Profit,
-		LastInvokeTime:            make(map[string]time.Time),
-		transaction_fee_list:      fee_list,
-		transaction_value_list:    value_list,
-		brokerInfoListInBrokerHub: broker_info_list_in_hub,
-		BrokerHubAccountList:      brokerhub_account_list,
-		brokerJoinBrokerHubState:  make(map[string]string),
-		brokerEpochProfitInB2E:    make(map[string]*big.Float),
-		brokerhubEpochProfit:      make(map[string]*big.Float),
-		taxOptimizer:              make(map[string]*optimizer),
-		hubParams:                 simulation_parameters,
+		csvPath:                     csvFilePath,
+		dataTotalNum:                dataNum,
+		batchDataNum:                batchNum,
+		nowDataNum:                  0,
+		dataTxNums:                  0,
+		brokerConfirm1Pool:          make(map[string]*message.Mag1Confirm),
+		brokerConfirm2Pool:          make(map[string]*message.Mag2Confirm),
+		restBrokerRawMegPool:        make([]*message.BrokerRawMeg, 0),
+		restBrokerRawMegPool2:       make([]*message.BrokerRawMeg, 0),
+		brokerTxPool:                make([]*core.Transaction, 0),
+		Broker:                      broker,
+		IpNodeTable:                 Ip_nodeTable,
+		Ss:                          Ss,
+		sl:                          sl,
+		Result_lockBalance:          result_lockBalance,
+		Result_brokerBalance:        result_brokerBalance,
+		Result_Profit:               result_Profit,
+		LastInvokeTime:              make(map[string]time.Time),
+		transaction_fee_list:        fee_list,
+		transaction_value_list:      value_list,
+		brokerInfoListInBrokerHub:   broker_info_list_in_hub,
+		global_broker_info_list_hub: global_info_list_hub,
+		BrokerHubAccountList:        brokerhub_account_list,
+		brokerJoinBrokerHubState:    make(map[string]string),
+		brokerEpochProfitInB2E:      make(map[string]*big.Float),
+		brokerhubEpochProfit:        make(map[string]*big.Float),
+		taxOptimizer:                make(map[string]*optimizer),
+		hubParams:                   simulation_parameters,
 	}
 
 }
@@ -298,7 +303,7 @@ func (bcm *BrokerhubCommitteeMod) judgeBrokerhubInfo(broker_id string, brokerhub
 	return "", true
 }
 
-func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhubDirectly(broker_id string, brokerhub_id string, token *big.Int) string {
+func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhubOrstackMore(broker_id string, brokerhub_id string, token *big.Int) string {
 	bcm.BrokerBalanceLock.Lock()
 	defer bcm.BrokerBalanceLock.Unlock()
 	if !slices.Contains(bcm.BrokerHubAccountList, brokerhub_id) {
@@ -308,7 +313,17 @@ func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhubDirectly(broker_id string, b
 		return "hub not init"
 	}
 	if _, exist := bcm.brokerJoinBrokerHubState[broker_id]; exist {
-		return "already in"
+		for _, broker_info := range bcm.brokerInfoListInBrokerHub[brokerhub_id] {
+			if broker_info.BrokerAddr == broker_id {
+				broker_info.BrokerBalance.Add(broker_info.BrokerBalance, token)
+				bcm.Broker.BrokerBalance[brokerhub_id][0].Add(
+					bcm.Broker.BrokerBalance[brokerhub_id][0],
+					token,
+				)
+				return "satck more done"
+			}
+		}
+		return "none info"
 	}
 	if bcm.Broker.IsBroker(broker_id) {
 		return "is broker"
@@ -324,6 +339,10 @@ func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhubDirectly(broker_id string, b
 	brokerinfo.BrokerProfit = big.NewFloat(0)
 	bcm.brokerInfoListInBrokerHub[brokerhub_id] = append(
 		bcm.brokerInfoListInBrokerHub[brokerhub_id],
+		brokerinfo,
+	)
+	bcm.global_broker_info_list_hub = append(
+		bcm.global_broker_info_list_hub,
 		brokerinfo,
 	)
 	bcm.brokerJoinBrokerHubState[broker_id] = brokerhub_id
@@ -349,6 +368,19 @@ func (bcm *BrokerhubCommitteeMod) WithdrawBrokerhubDirectly(broker_id string, br
 			return "hub id error", 0
 		}
 	}
+
+	for _, brokerinfo := range bcm.global_broker_info_list_hub {
+		if brokerinfo.BrokerAddr == broker_id {
+			profit := new(big.Int)
+			brokerinfo.BrokerProfit.Int(profit)
+			brokerinfo.BrokerBalance.Add(
+				brokerinfo.BrokerBalance,
+				profit,
+			)
+			break
+		}
+	}
+
 	for _, brokerinfo := range bcm.brokerInfoListInBrokerHub[brokerhub_id] {
 		if brokerinfo.BrokerAddr == broker_id {
 			bcm.brokerInfoListInBrokerHub[brokerhub_id] = slices.DeleteFunc(
@@ -541,6 +573,13 @@ func (bcm *BrokerhubCommitteeMod) allocateBrokerhubRevenue(addr string, ssid uin
 func (bcm *BrokerhubCommitteeMod) GetBrokerInfomationInHub(broker_id string) (uint64, float64, string) {
 	brokerhub_id, exist := bcm.brokerJoinBrokerHubState[broker_id]
 	if !exist {
+		for _, broker_info := range bcm.global_broker_info_list_hub {
+			if broker_info.BrokerAddr == broker_id {
+				fund := broker_info.BrokerBalance.Uint64()
+				earn, _ := broker_info.BrokerProfit.Float64()
+				return fund, earn, "exit"
+			}
+		}
 		return 0, 0, ""
 	}
 

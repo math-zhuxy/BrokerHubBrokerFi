@@ -22,9 +22,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/holiman/uint256"
 	"io"
 	"log"
 	"math/big"
@@ -34,6 +31,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -264,8 +265,8 @@ func (p *PbftConsensusNode) handleQueryContractResultReq(content []byte) {
 	json.Unmarshal(content, m)
 	var res []byte
 	var err error
-	now:=time.Now()
-	for time.Since(now).Milliseconds() <10000{
+	now := time.Now()
+	for time.Since(now).Milliseconds() < 10000 {
 		res, err = p.CurChain.Storage.GetContractRes(m.UUID)
 		if err == nil {
 			break
@@ -523,8 +524,7 @@ func (p *PbftConsensusNode) handleOpCreateRes(content []byte) {
 
 func (p *PbftConsensusNode) handleCOpExeLogOrRollback(content []byte) {
 
-
-	if p.NodeID !=0{
+	if p.NodeID != 0 {
 		return
 	}
 
@@ -691,7 +691,6 @@ func (p *PbftConsensusNode) handleOpStaticCallReq(content []byte) {
 		//r.Journal = nil
 	} else {
 
-
 	}
 	if sn == "new" {
 		global2.Root, _ = statedb.Commit(0, false)
@@ -726,11 +725,10 @@ func (p *PbftConsensusNode) handleOpCallReq(content []byte) {
 	global.ExeTxLock.LockWithOwner(m.UUID)
 	defer global.ExeTxLock.Unlock()
 
-
 	Str := hex.EncodeToString(m.Addr[:])
 	for true {
 		global.GLobalLock.Lock()
-		if _,ok1 :=global.GlobalLockMap[Str];ok1{
+		if _, ok1 := global.GlobalLockMap[Str]; ok1 {
 			global.GLobalLock.Unlock()
 			continue
 		}
@@ -740,12 +738,11 @@ func (p *PbftConsensusNode) handleOpCallReq(content []byte) {
 	}
 	defer func() {
 		global.GLobalLock.Lock()
-		delete(global.GlobalLockMap,Str)
+		delete(global.GlobalLockMap, Str)
 		global.GLobalLock.Unlock()
 	}()
 
-
-	fmt.Println("开始handleOpCallReq,value为",m.Value)
+	fmt.Println("开始handleOpCallReq,value为", m.Value)
 	blockContext := chain.NewEVMBlockContext(p.CurChain.CurrentBlock.Header, p.CurChain, nil)
 	statedb, _, sn := state.New(global2.Root, p.CurChain.Statedb)
 	snapshot := statedb.Snapshot()
@@ -871,7 +868,6 @@ func (p *PbftConsensusNode) handleOpCallReq(content []byte) {
 	if err != nil {
 		r.Journal = nil
 	} else {
-
 
 	}
 	if sn == "new" {
@@ -1119,7 +1115,7 @@ func (p *PbftConsensusNode) handleQueryAcc(content []byte) {
 	statedb, _ := state.New2(global2.Root, p.CurChain.Statedb)
 	decodeString, _ := hex.DecodeString(msg.Account)
 	balance := statedb.GetBalance(common.Address(decodeString))
-	code:=statedb.GetCode(common.Address(decodeString))
+	code := statedb.GetCode(common.Address(decodeString))
 
 	//if sn =="new"{
 	//	var E1 error
@@ -1139,7 +1135,7 @@ func (p *PbftConsensusNode) handleQueryAcc(content []byte) {
 	m := new(message.AccountRes)
 	m.Account = msg.Account
 	m.Balance = balance.Uint64()
-	m.Code=	code
+	m.Code = code
 	b, _ := json.Marshal(m)
 	m1 := message.MergeMessage(message.CResponseAccount, b)
 	go networks.TcpDial(m1, p.ip_nodeTable[msg.FromShardID][msg.FromNodeID])
