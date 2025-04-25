@@ -350,22 +350,22 @@ func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhubOrstackMore(broker_id string
 	return "done"
 }
 
-func (bcm *BrokerhubCommitteeMod) WithdrawBrokerhubDirectly(broker_id string, brokerhub_id string) (string, float64) {
+func (bcm *BrokerhubCommitteeMod) WithdrawBrokerhubDirectly(broker_id string, brokerhub_id string) (string, float64, uint64) {
 	bcm.BrokerBalanceLock.Lock()
 	defer bcm.BrokerBalanceLock.Unlock()
 	if !slices.Contains(bcm.BrokerHubAccountList, brokerhub_id) {
-		return "hub not exist", 0
+		return "hub not exist", 0, 0
 	}
 	if _, exist := bcm.Broker.BrokerBalance[brokerhub_id]; !exist {
-		return "hub not init", 0
+		return "hub not init", 0, 0
 	}
 	{
 		hub_id, exist := bcm.brokerJoinBrokerHubState[broker_id]
 		if !exist {
-			return "not in hub", 0
+			return "not in hub", 0, 0
 		}
 		if hub_id != brokerhub_id {
-			return "hub id error", 0
+			return "hub id error", 0, 0
 		}
 	}
 
@@ -391,10 +391,11 @@ func (bcm *BrokerhubCommitteeMod) WithdrawBrokerhubDirectly(broker_id string, br
 			)
 			delete(bcm.brokerJoinBrokerHubState, broker_id)
 			profit_in_hub, _ := brokerinfo.BrokerProfit.Float64()
-			return "done", profit_in_hub
+			fund_in_hub := brokerinfo.BrokerBalance.Uint64()
+			return "done", profit_in_hub, fund_in_hub
 		}
 	}
-	return "not in hub", 0
+	return "not in hub", 0, 0
 }
 
 func (bcm *BrokerhubCommitteeMod) JoiningToBrokerhub(broker_id string, brokerhub_id string) string {

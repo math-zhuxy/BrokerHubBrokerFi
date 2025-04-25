@@ -1420,6 +1420,21 @@ func (d *Supervisor) RunHTTP() error {
 			ctx.JSON(http.StatusOK, gin.H{"error": "Amount is invalid!"})
 			return
 		}
+		//扣减余额
+		tx := core.NewTransaction(broker_id, broker_id, new(big.Int).Abs(tokenInt), uint64(123), big.NewInt(0))
+		tx.IsAllocatedSender = true
+		txs := make([]*core.Transaction, 0)
+		txs = append(txs, tx)
+		it := message.InjectTxs{
+			Txs:       txs,
+			ToShardID: Clt.GetAddr2ShardMap(broker_id),
+		}
+		itByte, err := json.Marshal(it)
+		if err != nil {
+			log.Panic(err)
+		}
+		send_msg := message.MergeMessage(message.CInjectHead, itByte)
+		go networks.TcpDial(send_msg, d.ComMod.(*committee.BrokerhubCommitteeMod).IpNodeTable[Clt.GetAddr2ShardMap(broker_id)][0])
 		res := d.ComMod.(*committee.BrokerhubCommitteeMod).JoiningToBrokerhubOrstackMore(broker_id, hub_id, tokenInt)
 		ctx.JSON(http.StatusOK, gin.H{"msg": res})
 	})
@@ -1435,10 +1450,26 @@ func (d *Supervisor) RunHTTP() error {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Address is required"})
 			return
 		}
-		res, profit := d.ComMod.(*committee.BrokerhubCommitteeMod).WithdrawBrokerhubDirectly(broker_id, hub_id)
+		res, profit, fund := d.ComMod.(*committee.BrokerhubCommitteeMod).WithdrawBrokerhubDirectly(broker_id, hub_id)
+		//返还到账户余额
+		tx := core.NewTransaction(broker_id, broker_id, new(big.Int).SetUint64(fund), uint64(123), big.NewInt(0))
+		tx.IsAllocatedRecipent = true
+		txs := make([]*core.Transaction, 0)
+		txs = append(txs, tx)
+		it := message.InjectTxs{
+			Txs:       txs,
+			ToShardID: Clt.GetAddr2ShardMap(broker_id),
+		}
+		itByte, err := json.Marshal(it)
+		if err != nil {
+			log.Panic(err)
+		}
+		send_msg := message.MergeMessage(message.CInjectHead, itByte)
+		go networks.TcpDial(send_msg, d.ComMod.(*committee.BrokerhubCommitteeMod).IpNodeTable[Clt.GetAddr2ShardMap(broker_id)][0])
 		ctx.JSON(http.StatusOK, gin.H{
 			"msg":    res,
 			"profit": profit,
+			"fund":   fund,
 		})
 	})
 
