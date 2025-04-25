@@ -1451,6 +1451,7 @@ func (d *Supervisor) RunHTTP() error {
 			return
 		}
 		res, profit, fund := d.ComMod.(*committee.BrokerhubCommitteeMod).WithdrawBrokerhubDirectly(broker_id, hub_id)
+
 		//返还到账户余额
 		tx := core.NewTransaction(broker_id, broker_id, new(big.Int).SetUint64(fund), uint64(123), big.NewInt(0))
 		tx.IsAllocatedRecipent = true
